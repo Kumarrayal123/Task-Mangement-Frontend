@@ -1,0 +1,317 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.staff-container {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+  display: flex;
+}
+
+.main-content {
+  flex: 1;
+  margin-left: 260px;
+  transition: margin-left 0.3s ease;
+}
+
+.dashboard-navbar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 15px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand h2 {
+  color: white;
+  font-size: 24px;
+}
+
+.navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.user-name {
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.logout-button {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid white;
+  padding: 8px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s;
+}
+
+.logout-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.staff-content {
+  padding: 40px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.staff-header {
+  margin-bottom: 30px;
+}
+
+.staff-header h1 {
+  color: #333;
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.staff-header p {
+  color: #666;
+  font-size: 16px;
+}
+
+.staff-actions {
+  margin-bottom: 30px;
+}
+
+.add-staff-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: transform 0.2s;
+}
+
+.add-staff-button:hover {
+  transform: translateY(-2px);
+}
+
+.staff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.staff-card {
+  background: white;
+  padding: 25px;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.staff-info {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.staff-avatar {
+  font-size: 48px;
+  min-width: 60px;
+}
+
+.staff-details h3 {
+  color: #333;
+  font-size: 18px;
+  margin-bottom: 5px;
+}
+
+.staff-details p {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.staff-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.staff-status.active {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.staff-status.inactive {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.staff-actions-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.edit-button {
+  background: #ffc107;
+  color: #333;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s;
+}
+
+.edit-button:hover {
+  background: #e0a800;
+}
+
+.delete-button {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s;
+}
+
+.delete-button:hover {
+  background: #c82333;
+}
+
+.loading-message,
+.error-message,
+.no-employees {
+  text-align: center;
+  padding: 40px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-top: 20px;
+}
+
+.loading-message p,
+.error-message p,
+.no-employees p {
+  color: #666;
+  font-size: 16px;
+}
+
+.error-message p {
+  color: #dc3545;
+}
+
+.staff-table-container {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+.staff-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.staff-table thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.staff-table th {
+  color: white;
+  padding: 15px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.staff-table tbody tr {
+  border-bottom: 1px solid #e0e0e0;
+  transition: background 0.3s;
+}
+
+.staff-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.staff-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.staff-table td {
+  padding: 15px;
+  color: #333;
+  font-size: 14px;
+}
+
+.staff-table td:first-child {
+  font-weight: 600;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.table-actions .edit-button,
+.table-actions .delete-button {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 80px;
+  }
+
+  .dashboard-navbar {
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px;
+  }
+
+  .staff-content {
+    padding: 20px;
+  }
+
+  .staff-header h1 {
+    font-size: 24px;
+  }
+
+  .staff-table-container {
+    overflow-x: auto;
+  }
+
+  .staff-table {
+    min-width: 600px;
+  }
+
+  .staff-table th,
+  .staff-table td {
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  .table-actions {
+    flex-direction: column;
+  }
+
+  .table-actions .edit-button,
+  .table-actions .delete-button {
+    width: 100%;
+  }
+}

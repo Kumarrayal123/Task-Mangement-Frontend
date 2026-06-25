@@ -6,17 +6,14 @@ const API_BASE_URL = 'http://localhost:5001/api/tasks';
 export const createTask = async (taskData, voiceNoteFile) => {
   const formData = new FormData();
   
-  // Fields that are ObjectId refs — never send as empty string
   const objectIdFields = ['department', 'createdBy', 'projectId'];
 
-  // Append all task fields
   Object.keys(taskData).forEach(key => {
     const value = taskData[key];
     if (value !== null && value !== undefined) {
       if (Array.isArray(value)) {
         formData.append(key, JSON.stringify(value));
       } else if (objectIdFields.includes(key)) {
-        // Only send ObjectId fields if they have a non-empty value
         if (value && value !== '') {
           formData.append(key, value);
         }
@@ -26,7 +23,6 @@ export const createTask = async (taskData, voiceNoteFile) => {
     }
   });
 
-  // Append voice note if exists
   if (voiceNoteFile) {
     formData.append('voiceNote', voiceNoteFile);
   }
@@ -97,10 +93,35 @@ export const getDepartmentTasks = async (departmentId) => {
   return response.data;
 };
 
-// Get Task Statistics
+// Get Task Statistics - FIXED
 export const getTaskStats = async () => {
-  const response = await axios.get(`${API_BASE_URL}/stats`);
-  return response.data;
+  try {
+    const response = await axios.get(`${API_BASE_URL}/stats`);
+    console.log('Stats API Response:', response.data);
+    
+    // Extract stats from the response
+    if (response.data && response.data.stats) {
+      return response.data.stats;
+    }
+    
+    // If stats is directly in response
+    if (response.data && response.data.total !== undefined) {
+      return response.data;
+    }
+    
+    // Fallback
+    return response.data || { total: 0, pending: 0, inProgress: 0, completed: 0, overdue: 0, rejected: 0 };
+  } catch (error) {
+    console.error('Error fetching task stats:', error);
+    return {
+      total: 0,
+      pending: 0,
+      inProgress: 0,
+      completed: 0,
+      overdue: 0,
+      rejected: 0
+    };
+  }
 };
 
 // Get Overdue Tasks
@@ -167,5 +188,33 @@ export const getAllReportedIssues = async () => {
 // Get My Reported Issues
 export const getMyReportedIssues = async (employeeId) => {
   const response = await axios.get(`${API_BASE_URL}/reported-issues/${employeeId}`);
+  return response.data;
+};
+
+// Get Task Issues (NEW FUNCTION)
+export const getTaskIssues = async (taskId) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/${taskId}/issues`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching task issues:', error);
+    throw error;
+  }
+};
+
+// Update Reported Issue (Admin)
+export const updateReportedIssue = async (taskId, issueId, updateData) => {
+  const response = await axios.put(
+    `${API_BASE_URL}/reported-issue/${taskId}/${issueId}`,
+    updateData
+  );
+  return response.data;
+};
+
+// Delete Reported Issue (Admin)
+export const deleteReportedIssue = async (taskId, issueId) => {
+  const response = await axios.delete(
+    `${API_BASE_URL}/reported-issue/${taskId}/${issueId}`
+  );
   return response.data;
 };

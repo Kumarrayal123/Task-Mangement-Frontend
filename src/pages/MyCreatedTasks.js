@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { 
   FiRefreshCw, FiCheckCircle, FiClock, FiAlertCircle, FiBarChart2,
   FiList, FiLogOut, FiUser, FiFlag, FiStar, FiEdit2, FiPlus,
@@ -10,14 +9,18 @@ import {
   FiChevronDown, FiChevronUp, FiLoader, FiDownload, FiFile,
   FiImage, FiFileText, FiExternalLink, FiMenu
 } from 'react-icons/fi';
-import { FaTasks } from 'react-icons/fa';
+import { FaTasks, FaRocket } from 'react-icons/fa';
 import EmployeeSidebar from '../components/EmployeeSidebar';
 import { 
   updateTaskByEmployee, 
-  reportTaskIssue,
-  getMyReportedIssues
+  getMyCreatedTasks, 
+  createTask, 
+  deleteTask,
+  getTaskIssues,
+  reportTaskIssue
 } from '../services/taskService';
 import './MyTask.css';
+import axios from 'axios';
 
 const TASK_API = 'http://localhost:5001/api/tasks';
 const GEOCODE_API = 'https://nominatim.openstreetmap.org/search';
@@ -36,6 +39,13 @@ const statusMeta = {
   'Completed':   { color: '#10b981', bg: 'bg-emerald-50/80', text: 'text-emerald-600', border: 'border-emerald-200/50', icon: <FiCheckCircle className="w-4 h-4" /> },
   'Rejected':    { color: '#ef4444', bg: 'bg-rose-50/80', text: 'text-rose-600', border: 'border-rose-200/50', icon: <FiX className="w-4 h-4" /> },
   'Overdue':     { color: '#f97316', bg: 'bg-orange-50/80', text: 'text-orange-600', border: 'border-orange-200/50', icon: <FiAlertCircle className="w-4 h-4" /> },
+};
+
+const issueStatusMeta = {
+  'Open':        { color: '#6366f1', bg: 'bg-indigo-50/80', text: 'text-indigo-600', border: 'border-indigo-200/50', icon: <FiCircle className="w-4 h-4" /> },
+  'In Progress': { color: '#3b82f6', bg: 'bg-blue-50/80', text: 'text-blue-600', border: 'border-blue-200/50', icon: <FiRefreshCw className="w-4 h-4" /> },
+  'Resolved':    { color: '#10b981', bg: 'bg-emerald-50/80', text: 'text-emerald-600', border: 'border-emerald-200/50', icon: <FiCheckCircle className="w-4 h-4" /> },
+  'Closed':      { color: '#6b7280', bg: 'bg-gray-50/80', text: 'text-gray-600', border: 'border-gray-200/50', icon: <FiX className="w-4 h-4" /> },
 };
 
 function formatDate(d) {
@@ -73,7 +83,7 @@ function StatCard({ label, value, icon, gradient }) {
   );
 }
 
-function MyAssignedTasks() {
+function MyCreatedTasks() {
   const navigate = useNavigate();
   const [employeeName, setName] = useState('');
   const [employeeId, setEmpId] = useState('');
@@ -92,6 +102,27 @@ function MyAssignedTasks() {
   });
   const [attachments, setAttachments] = useState([]);
   const [updateLoading, setUpdateLoading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createData, setCreateData] = useState({
+    taskName: '',
+    title: '',
+    description: '',
+    priority: 'Medium',
+    deadlineType: 'Days',
+    deadlineValue: 7,
+    remark: ''
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [voiceNoteFile, setVoiceNoteFile] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [audioChunks, setAudioChunks] = useState([]);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewTask, setViewTask] = useState(null);
+  const [showIssuesListModal, setShowIssuesListModal] = useState(false);
+  const [selectedTaskForIssues, setSelectedTaskForIssues] = useState(null);
+  const [taskIssues, setTaskIssues] = useState([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedTaskForReport, setSelectedTaskForReport] = useState(null);
   const [reportData, setReportData] = useState({
@@ -100,11 +131,6 @@ function MyAssignedTasks() {
     priority: 'Medium'
   });
   const [reportLoading, setReportLoading] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [viewTask, setViewTask] = useState(null);
-  const [showImageViewer, setShowImageViewer] = useState(false);
-  const [imageViewerUrl, setImageViewerUrl] = useState('');
-  const [imageViewerName, setImageViewerName] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // ─── Expense State ───
@@ -155,16 +181,45 @@ function MyAssignedTasks() {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.get(`${TASK_API}/my-assigned-tasks/${employeeId}`);
-      const data = res.data;
-      setTasks(Array.isArray(data) ? data : data.tasks || []);
+      const res = await getMyCreatedTasks(employeeId);
+      let tasksData = [];
+      if (res && res.success && res.tasks) {
+        tasksData = res.tasks;
+      } else if (Array.isArray(res)) {
+        tasksData = res;
+      } else if (res && res.data && Array.isArray(res.data)) {
+        tasksData = res.data;
+      }
+      setTasks(tasksData);
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.message || 'Failed to load tasks');
+      setError('Failed to load created tasks');
     } finally {
       setLoading(false);
     }
   }, [employeeId]);
+
+  const fetchTaskIssues = useCallback(async (taskId) => {
+    setIssuesLoading(true);
+    try {
+      const res = await getTaskIssues(taskId);
+      let issuesData = [];
+      if (Array.isArray(res)) {
+        issuesData = res;
+      } else if (res.issues && Array.isArray(res.issues)) {
+        issuesData = res.issues;
+      } else if (res.data && Array.isArray(res.data)) {
+        issuesData = res.data;
+      }
+      setTaskIssues(issuesData);
+      setShowIssuesListModal(true);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load task issues');
+    } finally {
+      setIssuesLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchTasks();
@@ -303,6 +358,105 @@ function MyAssignedTasks() {
     setAttachments(Array.from(e.target.files));
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      setMediaRecorder(recorder);
+      const chunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      recorder.onstop = () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], 'voice-note.webm', { type: 'audio/webm' });
+        setVoiceNoteFile(audioFile);
+        setAudioChunks(chunks);
+        stream.getTracks().forEach(track => track.stop());
+      };
+      recorder.start();
+      setIsRecording(true);
+      setAudioChunks([]);
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      alert('Could not access microphone. Please allow microphone access.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleCreateTask = async (e) => {
+    e.preventDefault();
+    setCreateLoading(true);
+    setError('');
+    try {
+      if (!employeeId) {
+        setError('User ID not found. Please login again.');
+        setCreateLoading(false);
+        return;
+      }
+      const taskData = {
+        ...createData,
+        assignType: 'SELF',
+        createdBy: employeeId,
+        createdByType: 'employee'
+      };
+      const response = await createTask(taskData, voiceNoteFile);
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to create task');
+      }
+      setShowCreateModal(false);
+      setCreateData({
+        taskName: '',
+        title: '',
+        description: '',
+        priority: 'Medium',
+        deadlineType: 'Days',
+        deadlineValue: 7,
+        remark: ''
+      });
+      setVoiceNoteFile(null);
+      setIsRecording(false);
+      setAudioChunks([]);
+      fetchTasks();
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to create task';
+      setError(errorMessage);
+      console.error('Create task error:', err.response?.data || err);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    setLoading(true);
+    try {
+      await deleteTask(taskId);
+      fetchTasks();
+    } catch (err) {
+      setError('Failed to delete task');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewTask = (task) => {
+    setViewTask(task);
+    setShowViewModal(true);
+  };
+
+  const handleViewTaskIssues = (task) => {
+    setSelectedTaskForIssues(task);
+    fetchTaskIssues(task._id);
+  };
+
   const handleReportIssueClick = (task) => {
     setSelectedTaskForReport(task);
     setReportData({
@@ -320,6 +474,11 @@ function MyAssignedTasks() {
       await reportTaskIssue(selectedTaskForReport._id, employeeId, reportData);
       setShowReportModal(false);
       setSelectedTaskForReport(null);
+      setReportData({
+        issueTitle: '',
+        issueDescription: '',
+        priority: 'Medium'
+      });
       fetchTasks();
     } catch (err) {
       setError('Failed to report issue');
@@ -329,22 +488,10 @@ function MyAssignedTasks() {
     }
   };
 
-  const handleViewTask = (task) => {
-    setViewTask(task);
-    setShowViewModal(true);
-  };
-
-  // ─── Handle View Attachment (Open in new tab) ───
+  // ─── Handle View Attachment ───
   const handleViewAttachment = (fileUrl, fileName) => {
     const fullUrl = `${BASE_URL}/${fileUrl}`;
-    const ext = fileName?.split('.').pop()?.toLowerCase() || '';
-    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico'];
-    
-    if (imageExts.includes(ext)) {
-      window.open(fullUrl, '_blank');
-    } else {
-      window.open(fullUrl, '_blank');
-    }
+    window.open(fullUrl, '_blank');
   };
 
   // ─── Handle Download Attachment ───
@@ -460,17 +607,22 @@ function MyAssignedTasks() {
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-sm sm:text-base md:text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent hidden xs:block truncate">
-                    My Assigned Tasks
+                    My Created Tasks
                   </h2>
                   <h2 className="text-xs sm:text-sm font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent xs:hidden">
-                    My Tasks
+                    Created Tasks
                   </h2>
                   <p className="text-[8px] sm:text-[10px] text-gray-500 hidden xs:block truncate max-w-[100px] sm:max-w-[200px]">
-                    {tasks.length} tasks assigned to you
+                    {tasks.length} tasks created by you
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-wrap">
+                <button onClick={() => setShowCreateModal(true)} className="px-2 sm:px-3 lg:px-4 py-1 sm:py-1.5 lg:py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full text-[10px] sm:text-xs lg:text-sm font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-1 sm:gap-2">
+                  <FiPlus className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4" />
+                  <span className="hidden xs:inline">Create Task</span>
+                  <span className="xs:hidden">Create</span>
+                </button>
                 <button onClick={fetchTasks} className="p-1.5 sm:p-2 lg:p-2.5 bg-white/40 backdrop-blur-sm rounded-xl border border-white/30 hover:bg-white/60 transition-all hover:scale-105">
                   <FiRefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
                 </button>
@@ -488,7 +640,7 @@ function MyAssignedTasks() {
           <main className="p-3 sm:p-4 md:p-6 lg:p-8">
             <div className="space-y-4 sm:space-y-6">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
-                <StatCard label="Total" value={counts.ALL} icon={<FiBarChart2 className="w-4 h-4 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-indigo-400 to-indigo-500 shadow-indigo-500/30" />
+                <StatCard label="Total Tasks" value={counts.ALL} icon={<FiBarChart2 className="w-4 h-4 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-indigo-400 to-indigo-500 shadow-indigo-500/30" />
                 <StatCard label="In Progress" value={counts['In Progress']} icon={<FiRefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-blue-400 to-blue-500 shadow-blue-500/30" />
                 <StatCard label="Completed" value={counts.Completed} icon={<FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-emerald-500/30" />
                 <StatCard label="Pending" value={counts.Pending} icon={<FiClock className="w-4 h-4 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-amber-400 to-amber-500 shadow-amber-500/30" />
@@ -548,70 +700,108 @@ function MyAssignedTasks() {
                     <FiList className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-indigo-400" />
                   </div>
                   <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-700">No tasks found</h3>
-                  <p className="text-xs sm:text-sm text-gray-400 mt-1">No tasks assigned to you yet</p>
+                  <p className="text-xs sm:text-sm text-gray-400 mt-1">Create your first task</p>
                 </div>
               ) : (
                 <div className="bg-white/40 backdrop-blur-xl rounded-2xl border border-white/30 shadow-lg overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[700px] sm:min-w-[800px]">
+                    <table className="w-full min-w-[800px] sm:min-w-[900px]">
                       <thead className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 backdrop-blur-sm">
                         <tr>
-                          <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Task</th>
-                          <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Title</th>
-                          <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Priority</th>
-                          <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell">Status</th>
-                          <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">Progress</th>
-                          <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">Due Date</th>
-                          <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Task</th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Title</th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Priority</th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell">Status</th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-center text-[8px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Issues</th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">Progress</th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[8px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">Due Date</th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-center text-[8px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200/50">
                         {filtered.map((t, index) => {
                           const st = statusMeta[t.status] || statusMeta['Pending'];
                           const pr = priorityMeta[t.priority] || priorityMeta['Medium'];
+                          const issueCount = t.reportedIssues?.length || 0;
                           return (
                             <tr key={t._id} className={`hover:bg-white/30 transition-all duration-200 ${index % 2 === 0 ? 'bg-white/20' : 'bg-white/10'}`}>
-                              <td className="px-3 sm:px-6 py-2 sm:py-4">
-                                <div className="text-[10px] sm:text-sm font-semibold text-gray-800 truncate max-w-[60px] sm:max-w-[150px]">{t.taskName}</div>
+                              <td className="px-2 sm:px-4 py-2 sm:py-4">
+                                <div className="text-[8px] sm:text-sm font-semibold text-gray-800 truncate max-w-[40px] sm:max-w-[120px]" title={t.taskName}>
+                                  {t.taskName}
+                                </div>
                               </td>
-                              <td className="px-3 sm:px-6 py-2 sm:py-4 hidden sm:table-cell">
-                                <div className="text-[10px] sm:text-sm text-gray-600 truncate max-w-[80px] sm:max-w-[150px]">{t.title}</div>
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 hidden sm:table-cell">
+                                <div className="text-[8px] sm:text-sm text-gray-600 truncate max-w-[60px] sm:max-w-[120px]" title={t.title}>
+                                  {t.title}
+                                </div>
                               </td>
-                              <td className="px-3 sm:px-6 py-2 sm:py-4">
-                                <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold ${pr.bg} ${pr.text} border ${pr.border}`}>
+                              <td className="px-2 sm:px-4 py-2 sm:py-4">
+                                <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[6px] sm:text-xs font-semibold ${pr.bg} ${pr.text} border ${pr.border}`}>
                                   {pr.icon}
                                   <span className="hidden xs:inline">{t.priority}</span>
                                 </span>
                               </td>
-                              <td className="px-3 sm:px-6 py-2 sm:py-4 hidden md:table-cell">
-                                <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold ${st.bg} ${st.text} border ${st.border}`}>
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 hidden md:table-cell">
+                                <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[6px] sm:text-xs font-semibold ${st.bg} ${st.text} border ${st.border}`}>
                                   {st.icon}
                                   {t.status}
                                 </span>
                               </td>
-                              <td className="px-3 sm:px-6 py-2 sm:py-4 hidden lg:table-cell">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-center">
+                                <button
+                                  onClick={() => handleViewTaskIssues(t)}
+                                  className={`inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold transition-all ${
+                                    issueCount > 0 
+                                      ? 'bg-rose-50/80 text-rose-600 border border-rose-200/50 hover:bg-rose-100' 
+                                      : 'bg-gray-50/80 text-gray-400 border border-gray-200/50'
+                                  }`}
+                                >
+                                  <FiAlertTriangle className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${issueCount > 0 ? 'text-rose-500' : 'text-gray-400'}`} />
+                                  {issueCount}
+                                </button>
+                              </td>
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 hidden lg:table-cell">
                                 <div className="flex items-center gap-1 sm:gap-2">
-                                  <div className="flex-1 min-w-[40px] sm:min-w-[60px]">
+                                  <div className="flex-1 min-w-[30px] sm:min-w-[50px]">
                                     <div className="w-full h-1.5 sm:h-2 bg-gray-200/50 rounded-full overflow-hidden">
                                       <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500" style={{ width: `${t.progress || 0}%` }} />
                                     </div>
                                   </div>
-                                  <span className="text-[8px] sm:text-xs font-medium text-gray-600">{t.progress || 0}%</span>
+                                  <span className="text-[6px] sm:text-xs font-medium text-gray-600 min-w-[20px] sm:min-w-[30px]">{t.progress || 0}%</span>
                                 </div>
                               </td>
-                              <td className="px-3 sm:px-6 py-2 sm:py-4 hidden lg:table-cell">
-                                <div className="text-[10px] sm:text-sm text-gray-600">{t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}</div>
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 hidden lg:table-cell">
+                                <div className="text-[8px] sm:text-sm text-gray-600">{t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}</div>
                               </td>
-                              <td className="px-3 sm:px-6 py-2 sm:py-4 text-right">
-                                <div className="flex items-center justify-end gap-0.5 sm:gap-1.5">
-                                  <button onClick={() => handleViewTask(t)} className="p-1 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-indigo-50 transition-all group" title="View Task">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4">
+                                <div className="flex items-center justify-center gap-0.5 sm:gap-1.5">
+                                  <button 
+                                    onClick={() => handleViewTask(t)} 
+                                    className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-indigo-50 transition-all group" 
+                                    title="View Task"
+                                  >
                                     <FiEye className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
                                   </button>
-                                  <button onClick={() => handleUpdateClick(t)} className="p-1 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-amber-50 transition-all group" title="Update Task">
+                                  <button 
+                                    onClick={() => handleUpdateClick(t)} 
+                                    className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-amber-50 transition-all group" 
+                                    title="Update Task"
+                                  >
                                     <FiEdit2 className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
                                   </button>
-                                  <button onClick={() => handleReportIssueClick(t)} className="p-1 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-all group" title="Report Issue">
+                                  <button 
+                                    onClick={() => handleReportIssueClick(t)} 
+                                    className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-all group" 
+                                    title="Report Issue"
+                                  >
                                     <FiAlertTriangle className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteTask(t._id)} 
+                                    className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-all group" 
+                                    title="Delete Task"
+                                  >
+                                    <FiTrash2 className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
                                   </button>
                                 </div>
                               </td>
@@ -628,10 +818,112 @@ function MyAssignedTasks() {
         </div>
       </div>
 
-      {/* Update Modal with Collapsible Expenses & Visible Lat/Lng */}
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
+            <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100/50 flex justify-between items-center">
+              <h3 className="text-base sm:text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-1.5 sm:gap-2">
+                <FiPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                Create Self Task
+              </h3>
+              <button className="p-1 sm:p-1.5 hover:bg-gray-100 rounded-full transition-colors" onClick={() => setShowCreateModal(false)}>
+                <FiX className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateTask} className="px-4 sm:px-6 py-4 sm:py-6">
+              <div className="space-y-3 sm:space-y-4">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">Task Name *</label>
+                  <input type="text" required value={createData.taskName} onChange={(e) => setCreateData({...createData, taskName: e.target.value})} placeholder="Enter task name" className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">Title *</label>
+                  <input type="text" required value={createData.title} onChange={(e) => setCreateData({...createData, title: e.target.value})} placeholder="Enter task title" className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">Description *</label>
+                  <textarea required value={createData.description} onChange={(e) => setCreateData({...createData, description: e.target.value})} placeholder="Describe the task..." rows="3" className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm resize-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:gap-4">
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">Priority</label>
+                    <select value={createData.priority} onChange={(e) => setCreateData({...createData, priority: e.target.value})} className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm">
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">Deadline Type</label>
+                    <select value={createData.deadlineType} onChange={(e) => setCreateData({...createData, deadlineType: e.target.value})} className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm">
+                      <option value="Days">Days</option>
+                      <option value="Week">Week</option>
+                      <option value="Month">Month</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">Deadline Value</label>
+                  <input type="number" min="1" value={createData.deadlineValue} onChange={(e) => setCreateData({...createData, deadlineValue: parseInt(e.target.value)})} className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">Remark</label>
+                  <textarea value={createData.remark} onChange={(e) => setCreateData({...createData, remark: e.target.value})} placeholder="Any additional remarks..." rows="2" className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm resize-none" />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
+                    <FiMic className="inline mr-1 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    Voice Note (Optional)
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    {!isRecording ? (
+                      <button type="button" onClick={startRecording} className="px-2 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full text-[8px] sm:text-xs font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-1 sm:gap-1.5">
+                        <FiMic className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                        Start Recording
+                      </button>
+                    ) : (
+                      <button type="button" onClick={stopRecording} className="px-2 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-full text-[8px] sm:text-xs font-semibold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 transition-all hover:scale-105 flex items-center gap-1 sm:gap-1.5">
+                        <FiMicOff className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                        Stop Recording
+                      </button>
+                    )}
+                    {voiceNoteFile && (
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <audio controls src={URL.createObjectURL(voiceNoteFile)} className="h-6 sm:h-8" />
+                        <button type="button" onClick={() => setVoiceNoteFile(null)} className="p-0.5 sm:p-1 bg-white/60 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-colors">
+                          <FiX className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-rose-500" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {isRecording && (
+                    <div className="mt-1 sm:mt-2 flex items-center gap-1.5 sm:gap-2 text-rose-500 text-[10px] sm:text-sm">
+                      <span className="relative flex h-2 w-2 sm:h-3 sm:w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 sm:h-3 sm:w-3 bg-rose-500"></span>
+                      </span>
+                      Recording...
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-100/50">
+                <button type="button" onClick={() => setShowCreateModal(false)} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-gray-700 font-medium hover:bg-gray-200 transition-all text-xs sm:text-sm">Cancel</button>
+                <button type="submit" disabled={createLoading} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                  {createLoading ? <><div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Creating...</> : <><FaRocket className="w-3.5 h-3.5 sm:w-4 sm:h-4" />Create Task</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Update Modal with Expenses & Auto Location */}
       {showUpdateModal && selectedTask && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
             <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100/50 flex justify-between items-center">
               <h3 className="text-base sm:text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-1.5 sm:gap-2">
                 <FiEdit2 className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -704,7 +996,7 @@ function MyAssignedTasks() {
                     </div>
                     <div className="flex items-center gap-1 sm:gap-2">
                       <FiPlusIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />
-                      <span className="text-[10px] sm:text-xs text-indigo-600 font-medium hidden xs:inline">
+                      <span className="text-[8px] sm:text-xs text-indigo-600 font-medium hidden xs:inline">
                         {expensesExpanded ? 'Collapse' : 'Add Expenses'}
                       </span>
                       {expensesExpanded ? (
@@ -813,7 +1105,7 @@ function MyAssignedTasks() {
                             <button
                               type="button"
                               onClick={() => getLocationFromAddress(newExpense.location.address)}
-                              disabled={fetchingLocation}
+                              disabled={fetchingLocation || !newExpense.location.address}
                               className="px-2 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg text-[8px] sm:text-xs font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-0.5 sm:gap-1"
                             >
                               {fetchingLocation ? (
@@ -946,7 +1238,7 @@ function MyAssignedTasks() {
         </div>
       )}
 
-      {/* ─── VIEW TASK MODAL WITH COMPLETE EXPENSES & CLICKABLE ATTACHMENTS ─── */}
+      {/* ─── COMPLETE VIEW TASK MODAL ─── */}
       {showViewModal && viewTask && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
@@ -1027,7 +1319,6 @@ function MyAssignedTasks() {
                           {update.remark && <span>Remark: {update.remark}</span>}
                           <span>{formatDateTime(update.updatedAt)}</span>
                         </div>
-                        {/* ─── Update Attachments (Clickable) ─── */}
                         {update.attachments && update.attachments.length > 0 && (
                           <div className="mt-1.5 sm:mt-2 space-y-0.5 sm:space-y-1">
                             {update.attachments.map((att, attIdx) => (
@@ -1077,7 +1368,6 @@ function MyAssignedTasks() {
                               <span className="text-xs sm:text-sm font-medium text-gray-600">- {exp.description}</span>
                             </div>
                             
-                            {/* Location Details */}
                             {exp.location && (
                               <div className="mt-1 sm:mt-2 space-y-0.5 sm:space-y-1">
                                 {exp.location.address && (
@@ -1094,12 +1384,10 @@ function MyAssignedTasks() {
                               </div>
                             )}
                             
-                            {/* Distance */}
                             {exp.distance > 0 && (
                               <p className="text-[8px] sm:text-xs text-gray-500 mt-0.5">📏 {exp.distance} km</p>
                             )}
                             
-                            {/* Date & Added By */}
                             <div className="mt-1 sm:mt-2 flex flex-wrap items-center gap-1.5 sm:gap-3 text-[8px] sm:text-[10px] text-gray-400">
                               <span>Added: {formatDateTime(exp.addedAt || exp.expenseDate)}</span>
                               {exp.approvalStatus && (
@@ -1118,7 +1406,6 @@ function MyAssignedTasks() {
                     ))}
                   </div>
                   
-                  {/* Total Expenses */}
                   <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 rounded-xl border border-indigo-200/50">
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] sm:text-sm font-semibold text-gray-700">Total Expenses</span>
@@ -1130,7 +1417,7 @@ function MyAssignedTasks() {
                 </div>
               )}
 
-              {/* ─── TASK ATTACHMENTS (Clickable) ─── */}
+              {/* ─── TASK ATTACHMENTS ─── */}
               {viewTask.attachments && viewTask.attachments.length > 0 && (
                 <div className="mb-3 sm:mb-4">
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
@@ -1201,8 +1488,62 @@ function MyAssignedTasks() {
           </div>
         </div>
       )}
+
+      {/* View Issues List Modal */}
+      {showIssuesListModal && selectedTaskForIssues && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
+            <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100/50 flex justify-between items-center">
+              <h3 className="text-base sm:text-xl font-bold bg-gradient-to-r from-rose-600 to-rose-500 bg-clip-text text-transparent flex items-center gap-1.5 sm:gap-2">
+                <FiAlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-rose-500" />
+                Issues for: {selectedTaskForIssues.taskName}
+              </h3>
+              <button className="p-1 sm:p-1.5 hover:bg-gray-100 rounded-full transition-colors" onClick={() => { setShowIssuesListModal(false); setSelectedTaskForIssues(null); setTaskIssues([]); }}>
+                <FiX className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="px-4 sm:px-6 py-4 sm:py-6">
+              {issuesLoading ? (
+                <div className="text-center py-6 sm:py-8 text-gray-500 text-sm">Loading issues...</div>
+              ) : taskIssues.length === 0 ? (
+                <div className="text-center py-6 sm:py-8">
+                  <p className="text-gray-500 text-sm">No issues reported for this task</p>
+                </div>
+              ) : (
+                <div className="space-y-2 sm:space-y-3">
+                  {taskIssues.map((issue, idx) => {
+                    const st = issueStatusMeta[issue.status] || issueStatusMeta['Open'];
+                    const pr = priorityMeta[issue.priority] || priorityMeta['Medium'];
+                    return (
+                      <div key={idx} className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 hover:shadow-lg transition-all">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-2 sm:gap-0">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs sm:text-sm font-semibold text-gray-800">{issue.issueTitle}</h4>
+                            <p className="text-[10px] sm:text-sm text-gray-600 mt-0.5 sm:mt-1">{issue.issueDescription}</p>
+                            <p className="text-[8px] sm:text-xs text-gray-400 mt-1">Reported: {formatDate(issue.reportedAt)}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-1 sm:gap-2 ml-0 sm:ml-4">
+                            <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold ${pr.bg} ${pr.text} border ${pr.border}`}>
+                              {pr.icon}
+                              <span className="hidden xs:inline">{issue.priority}</span>
+                            </span>
+                            <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold ${st.bg} ${st.text} border ${st.border}`}>
+                              {st.icon}
+                              <span className="hidden xs:inline">{issue.status}</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default MyAssignedTasks;
+export default MyCreatedTasks;

@@ -63,9 +63,9 @@ import {
   deleteTask,
 } from '../services/taskService';
 
-const EMPLOYEES_API = 'https://api.timelyhealth.in/api/employees/get-employees';
-const API_BASE_URL = 'http://localhost:5001/api/tasks';
-const BASE_URL = 'http://localhost:5001';
+const EMPLOYEES_API = 'http://62.72.29.27:5001/api/employees/get-employees';
+const API_BASE_URL = 'http://62.72.29.27:5001/api/tasks';
+const BASE_URL = 'http://62.72.29.27:5001';
 
 // ─── EmployeeSelector ───
 const EmployeeSelector = ({

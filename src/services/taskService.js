@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5001/api/tasks';
+const API_BASE_URL = 'http://62.72.29.27:5001/api/tasks';
 
 // Create Task
 export const createTask = async (taskData, voiceNoteFile) => {

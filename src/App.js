@@ -12,6 +12,7 @@ import MyCreatedTasks from './pages/MyCreatedTasks';
 import MyIssues from './pages/MyIssues';
 import Notifications from './pages/Notifications';
 import MyNotifications from './pages/MyNotifications';
+import MyProfile from './pages/MyProfile';
 function App() {
   return (
     <Router>
@@ -26,6 +27,7 @@ function App() {
           <Route path="/my-createdtask" element={<MyCreatedTasks />} />
           <Route path="/my-issues" element={<MyIssues />} />
            <Route path="/my-notifications" element={<MyNotifications />} />
+          <Route path="/employee-profile" element={<MyProfile />} />
           <Route path="/issues" element={<Issues />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="*" element={<Navigate to="/" />} />

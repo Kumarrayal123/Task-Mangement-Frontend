@@ -14,7 +14,7 @@ import { FaTasks, FaRocket } from 'react-icons/fa';
 import Sidebar from '../Sidebar';
 import '../Sidebar.css';
 
-const NOTIFICATIONS_API = 'http://localhost:5001/api/tasks/notifications';
+const NOTIFICATIONS_API = 'http://62.72.29.27:5001/api/tasks/notifications';
 
 function formatDate(d) {
   if (!d) return '—';
@@ -128,7 +128,7 @@ function Notifications() {
     if (!window.confirm('Are you sure you want to delete this notification?')) return;
     setLoading(true);
     try {
-      await axios.delete(`http://localhost:5001/api/tasks/notifications/${notificationId}`);
+      await axios.delete(`http://62.72.29.27:5001/api/tasks/notifications/${notificationId}`);
       fetchNotifications();
       showToastMessage('Notification deleted successfully!', 'success');
     } catch (err) {
@@ -152,7 +152,7 @@ function Notifications() {
     setLoading(true);
     try {
       for (const notifId of selectedNotifications) {
-        await axios.delete(`http://localhost:5001/api/tasks/notifications/${notifId}`);
+        await axios.delete(`http://62.72.29.27:5001/api/tasks/notifications/${notifId}`);
       }
       fetchNotifications();
       setSelectedNotifications([]);
@@ -179,7 +179,7 @@ function Notifications() {
     setLoading(true);
     try {
       for (const notif of notifications) {
-        await axios.delete(`http://localhost:5001/api/tasks/notifications/${notif._id}`);
+        await axios.delete(`http://62.72.29.27:5001/api/tasks/notifications/${notif._id}`);
       }
       fetchNotifications();
       setSelectedNotifications([]);

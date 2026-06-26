@@ -4,7 +4,7 @@ import axios from 'axios';
 import { FiMail, FiLock, FiLogIn, FiUser, FiBriefcase, FiZap, FiEye, FiEyeOff, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 import './Login.css';
 
-const BASE_URL = 'https://api.timelyhealth.in/api';
+const BASE_URL = 'http://62.72.29.27:5001/api';
 
 function Login() {
   const navigate = useNavigate();
@@ -65,13 +65,41 @@ function Login() {
         }
       );
 
-      const userData = employeeResponse.data;
-      const name = userData.employee?.name || userData.name || userData.fullName || 'Employee';
-      const role = 'Employee';
+      const responseData = employeeResponse.data;
+      
+      // ─── Extract data from response ───
+      const employee = responseData.employee || {};
+      const name = employee.name || responseData.name || 'Employee';
+      const role = employee.role || 'Employee';
+      const employeeId = employee.employeeId || employee.id || '';
+      const email = employee.email || formData.email;
+      
+      // ─── Build userData object ───
+      const userData = {
+        _id: employee.id || employee._id || '',
+        id: employee.id || employee._id || '',
+        name: name,
+        fullName: name,
+        employeeName: name,
+        firstName: name.split(' ')[0] || name,
+        email: email,
+        employeeId: employeeId, // ─── This is the customized ID (TH011)
+        role: role,
+        department: employee.department || '',
+        joinDate: employee.joinDate || '',
+        permissions: employee.permissions || [],
+        // ─── Store the actual employee object too ───
+        employee: employee
+      };
+      
+      console.log('Employee Login Response:', responseData);
+      console.log('Stored userData:', userData);
       
       localStorage.setItem("userData", JSON.stringify(userData));
-      if (userData.token) {
-        localStorage.setItem("token", userData.token);
+      if (responseData.token) {
+        localStorage.setItem("token", responseData.token);
+      } else if (employee.token) {
+        localStorage.setItem("token", employee.token);
       }
       localStorage.setItem("userRole", "employee");
 
@@ -96,9 +124,22 @@ function Login() {
           }
         );
 
-        const userData = adminResponse.data;
-        const name = userData.admin?.name || userData.name || userData.fullName || 'Admin';
+        const responseData = adminResponse.data;
+        const admin = responseData.admin || responseData.data || {};
+        const name = admin.name || responseData.name || 'Admin';
         const role = 'Admin';
+        
+        const userData = {
+          _id: admin.id || admin._id || '',
+          id: admin.id || admin._id || '',
+          name: name,
+          fullName: name,
+          adminName: name,
+          email: admin.email || formData.email,
+          role: role,
+          // ─── Store admin object ───
+          admin: admin
+        };
         
         localStorage.setItem("userData", JSON.stringify(userData));
         if (adminResponse.data.token) {

@@ -43,8 +43,8 @@ const BOTTOM_NAV_ITEMS = [
     label: 'Tasks', 
     isParent: true,
     children: [
-      { id: 'assigned', label: 'Assigned', path: '/my-task', icon: <FiList className="w-4 h-4" /> },
-      { id: 'created', label: 'Created', path: '/my-createdtask', icon: <FiPlus className="w-4 h-4" /> },
+      { id: 'my-tasks', label: 'My Tasks', path: '/my-task', icon: <FiList className="w-4 h-4" /> },
+      { id: 'create-task', label: 'Create Task', path: '/create-task', icon: <FiPlus className="w-4 h-4" /> },
     ]
   },
   { 
@@ -85,8 +85,8 @@ const NAV_ITEMS = [
     label: 'Tasks',
     isParent: true,
     children: [
-      { id: 'assigned', label: 'Assigned Tasks', path: '/my-task', icon: <FiList className="w-4 h-4" /> },
-      { id: 'created', label: 'Created Tasks', path: '/my-createdtask', icon: <FiPlus className="w-4 h-4" /> },
+      { id: 'my-tasks', label: 'My Tasks', path: '/my-task', icon: <FiList className="w-4 h-4" /> },
+      { id: 'create-task', label: 'Create Task', path: '/create-task', icon: <FiPlus className="w-4 h-4" /> },
     ]
   },
   { 
@@ -175,16 +175,19 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
     return children?.some(child => location.pathname === child.path);
   };
 
-  const checkIsActive = (path) => location.pathname === path;
+  const checkIsActive = (path) => {
+    if (path === '/my-task' && location.pathname === '/my-task') return true;
+    if (path === '/create-task' && location.pathname === '/create-task') return true;
+    return location.pathname === path;
+  };
 
   const isBottomNavActive = (path) => {
     if (path === '/my-task' && location.pathname === '/my-task') return true;
+    if (path === '/create-task' && location.pathname === '/create-task') return true;
     if (path === '/my-issues' && location.pathname === '/my-issues') return true;
     if (path === '/my-notifications' && location.pathname === '/my-notifications') return true;
     if (path === '/employee-profile' && location.pathname === '/employee-profile') return true;
     if (path === '/employee-dashboard' && location.pathname === '/employee-dashboard') return true;
-    if (path === '/my-task' && location.pathname.startsWith('/my-createdtask')) return true;
-    if (path === '/my-task' && location.pathname === '/my-createdtask') return true;
     return false;
   };
 
@@ -194,8 +197,7 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
       const taskItem = BOTTOM_NAV_ITEMS.find(item => item.id === 'tasks');
       if (taskItem?.children) {
         for (const child of taskItem.children) {
-          if (location.pathname === child.path || 
-              (child.path === '/my-task' && location.pathname.startsWith('/my-createdtask'))) {
+          if (location.pathname === child.path) {
             return child.label;
           }
         }
@@ -272,8 +274,7 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
                         border border-white/30 p-1.5 min-w-[150px] animate-slideUp">
                         <div className="space-y-0.5">
                           {item.children.map((child) => {
-                            const childIsActive = checkIsActive(child.path) || 
-                              (child.path === '/my-task' && location.pathname.startsWith('/my-createdtask'));
+                            const childIsActive = checkIsActive(child.path);
                             return (
                               <button
                                 key={child.id}
@@ -411,7 +412,7 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
               );
             }
 
-            // ─── Issues, Notifications Items ───
+            // ─── Regular Items ───
             return (
               <button
                 key={item.id}
@@ -546,12 +547,11 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
                     )}
                   </button>
 
-                  {/* Child Items - Only Assigned and Created */}
+                  {/* Child Items - My Tasks and Create Task */}
                   {!collapsed && isExpanded && (
                     <div className="ml-4 pl-3 space-y-1 border-l-2 border-indigo-200/30">
                       {item.children.map((child) => {
-                        const childIsActive = checkIsActive(child.path) || 
-                          (child.path === '/my-task' && location.pathname.startsWith('/my-createdtask'));
+                        const childIsActive = checkIsActive(child.path);
                         return (
                           <button
                             key={child.id}

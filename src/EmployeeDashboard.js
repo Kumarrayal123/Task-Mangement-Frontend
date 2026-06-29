@@ -28,13 +28,16 @@ import {
   FiDollarSign,
   FiX,
   FiBell,
-  FiClock as FiClockIcon
+  FiClock as FiClockIcon,
+  FiPlus,
+  FiSmile
 } from 'react-icons/fi';
 import { FaTasks, FaRocket } from 'react-icons/fa';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
 import EmployeeSidebar from './components/EmployeeSidebar';
 
-const TASK_API = 'http://62.72.29.27:5001/api/tasks';
-const NOTIFICATIONS_API = 'http://62.72.29.27:5001/api/tasks/employeenotifications';
+const TASK_API = 'https://api.timelyhealth.in/api/tasks';
+const NOTIFICATIONS_API = 'https://api.timelyhealth.in/api/tasks/employeenotifications';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const priorityMeta = {
@@ -79,6 +82,33 @@ function StatCard({ label, value, icon, gradient }) {
   );
 }
 
+// ── Quick Action Card ──────────────────────────────────────────────────────
+function QuickActionCard({ icon, label, color, onClick }) {
+  return (
+    <div 
+      onClick={onClick}
+      className={`bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-5 border border-white/30 
+        shadow-lg hover:shadow-xl transition-all hover:scale-105 cursor-pointer group
+        hover:border-${color}-300/50`}
+    >
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-r ${color}`}>
+          <span className="text-white text-sm sm:text-base lg:text-lg">{icon}</span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs sm:text-sm lg:text-base font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors">
+            {label}
+          </p>
+          <p className="text-[6px] sm:text-[8px] lg:text-[10px] text-gray-400 truncate">
+            Click to {label.toLowerCase()}
+          </p>
+        </div>
+        <FiChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all ml-auto" />
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 function EmployeeDashboard() {
   const navigate = useNavigate();
@@ -88,6 +118,7 @@ function EmployeeDashboard() {
   const [error, setError] = useState('');
   const [showDuePopup, setShowDuePopup] = useState(false);
   const [dueTask, setDueTask] = useState(null);
+  const [showWelcomePopup, setShowWelcomePopup] = useState(true);
   const [dashboardData, setDashboardData] = useState({
     totalAssignedTasks: 0,
     pendingTasks: 0,
@@ -107,7 +138,41 @@ function EmployeeDashboard() {
   const [notificationCount, setNotificationCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // ── Voice Function for Due Date Alert (Female Voice) ──
+  // ── Voice Function for Welcome (Female Voice) ──
+  const speakWelcome = (name) => {
+    if ('speechSynthesis' in window) {
+      const message = `Welcome back, ${name}! Have a great day!`;
+      
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.85;
+      utterance.pitch = 1.2;
+      utterance.volume = 1;
+      
+      const voices = window.speechSynthesis.getVoices();
+      const femaleVoice = voices.find(voice => 
+        voice.name.includes('Female') || 
+        voice.name.includes('Samantha') ||
+        voice.name.includes('Google UK') || 
+        voice.name.includes('Victoria') ||
+        voice.name.includes('Zira') ||
+        voice.name.includes('Marie') ||
+        voice.name.includes('Ellen') ||
+        voice.name.includes('Susan') ||
+        voice.name.includes('Karen')
+      );
+      
+      if (femaleVoice) {
+        utterance.voice = femaleVoice;
+      } else {
+        utterance.pitch = 1.3;
+      }
+      
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // ── Voice Function for Due Date Alert ──
   const speakDueAlert = (taskName, dueDate) => {
     if ('speechSynthesis' in window) {
       const today = new Date();
@@ -115,7 +180,6 @@ function EmployeeDashboard() {
       const due = new Date(dueDate);
       due.setHours(0, 0, 0, 0);
       
-      // Calculate days difference correctly
       const diffTime = due.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
@@ -136,13 +200,10 @@ function EmployeeDashboard() {
       const utterance = new SpeechSynthesisUtterance(message);
       utterance.lang = 'en-US';
       utterance.rate = 0.85;
-      utterance.pitch = 1.2; // Higher pitch for female voice
+      utterance.pitch = 1.2;
       utterance.volume = 1;
       
-      // Get all available voices and find a female voice
       const voices = window.speechSynthesis.getVoices();
-      
-      // Try to find a female voice (Google UK Female, Samantha, etc.)
       const femaleVoice = voices.find(voice => 
         voice.name.includes('Female') || 
         voice.name.includes('Samantha') ||
@@ -155,25 +216,28 @@ function EmployeeDashboard() {
         voice.name.includes('Karen')
       );
       
-      // If female voice found, use it, otherwise use default
       if (femaleVoice) {
         utterance.voice = femaleVoice;
       } else {
-        // Try to use any available voice with higher pitch for female effect
         utterance.pitch = 1.3;
       }
       
-      // Speak the message
       window.speechSynthesis.speak(utterance);
     }
   };
 
-  // ── Handle sidebar collapse state ──
   const handleSidebarToggle = (collapsed) => {
     setSidebarCollapsed(collapsed);
   };
 
-  // ── Load user from localStorage ──
+  // ── Dismiss Welcome Popup ──
+  const dismissWelcomePopup = () => {
+    setShowWelcomePopup(false);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
   useEffect(() => {
     const raw = localStorage.getItem('userData');
     if (!raw) { navigate('/'); return; }
@@ -198,7 +262,6 @@ function EmployeeDashboard() {
     }
   }, [navigate]);
 
-  // ── Fetch Notification Count ──
   const fetchNotificationCount = useCallback(async () => {
     if (!employeeId) return;
     try {
@@ -211,7 +274,6 @@ function EmployeeDashboard() {
     }
   }, [employeeId]);
 
-  // ── Fetch Dashboard Data ──
   const fetchDashboard = useCallback(async () => {
     if (!employeeId) return;
     setLoading(true);
@@ -222,6 +284,12 @@ function EmployeeDashboard() {
       
       if (data.success) {
         setDashboardData(data.dashboard);
+        
+        if (showWelcomePopup) {
+          setTimeout(() => {
+            speakWelcome(employeeName);
+          }, 800);
+        }
         
         const upcoming = data.dashboard.upcomingTasks || [];
         if (upcoming.length > 0) {
@@ -242,7 +310,7 @@ function EmployeeDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [employeeId]);
+  }, [employeeId, employeeName, showWelcomePopup]);
 
   useEffect(() => { 
     if (employeeId) {
@@ -266,7 +334,23 @@ function EmployeeDashboard() {
   };
 
   const navigateToNotifications = () => {
+    if (showWelcomePopup) dismissWelcomePopup();
     navigate('/my-notifications');
+  };
+
+  const navigateToProfile = () => {
+    if (showWelcomePopup) dismissWelcomePopup();
+    navigate('/employee-profile');
+  };
+
+  const navigateToMyTasks = () => {
+    if (showWelcomePopup) dismissWelcomePopup();
+    navigate('/my-task');
+  };
+
+  const navigateToCreateTask = () => {
+    if (showWelcomePopup) dismissWelcomePopup();
+    navigate('/create-task');
   };
 
   const {
@@ -285,7 +369,6 @@ function EmployeeDashboard() {
     myExpenses
   } = dashboardData;
 
-  // ── Calculate days left correctly ──
   const getDaysLeft = (dueDate) => {
     if (!dueDate) return 0;
     const today = new Date();
@@ -296,26 +379,145 @@ function EmployeeDashboard() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  // ── Dynamic padding based on sidebar state ──
   const mainContentPadding = sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-[280px]';
 
-  // ── Render ──
+  // ── Prepare chart data ──
+  const pieData = Object.entries(priorityBreakdown).map(([name, value]) => ({
+    name,
+    value,
+    color: priorityMeta[name]?.color || '#94a3b8'
+  })).filter(item => item.value > 0);
+
+  const barData = [
+    { name: 'Critical', tasks: priorityBreakdown.Critical || 0, color: '#ef4444' },
+    { name: 'High', tasks: priorityBreakdown.High || 0, color: '#f97316' },
+    { name: 'Medium', tasks: priorityBreakdown.Medium || 0, color: '#eab308' },
+    { name: 'Low', tasks: priorityBreakdown.Low || 0, color: '#22c55e' }
+  ];
+
+  const performanceData = [
+    { name: 'Tasks Done', value: completedTasks, color: '#6366f1', icon: '📊' },
+    { name: 'Active Tasks', value: activeTasks, color: '#f59e0b', icon: '⚡' },
+    { name: 'Completion Rate', value: completionRate, color: '#10b981', icon: '📈' },
+    { name: 'Created Tasks', value: myCreatedTasks, color: '#8b5cf6', icon: '📝' },
+    { name: 'Reported Issues', value: myReportedIssues, color: '#ef4444', icon: '🐛' },
+    { name: 'Expenses (₹)', value: myExpenses, color: '#22c55e', icon: '💰' }
+  ];
+
+  const extraStatsData = [
+    { name: 'Reported Issues', value: myReportedIssues, color: '#ef4444' },
+    { name: 'Total Expenses', value: myExpenses / 100, color: '#22c55e' }
+  ];
+
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white/90 backdrop-blur-sm p-2 sm:p-3 rounded-lg shadow-lg border border-white/30 text-xs sm:text-sm">
+          <p className="font-semibold text-gray-800">{payload[0].name}</p>
+          <p className="text-gray-600">Value: <span className="font-bold">{payload[0].value}</span></p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const PerformanceTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white/90 backdrop-blur-sm p-2 sm:p-3 rounded-lg shadow-lg border border-white/30 text-xs sm:text-sm">
+          <p className="font-semibold text-gray-800">{payload[0].name}</p>
+          <p className="text-gray-600">Value: <span className="font-bold">{payload[0].value}</span></p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex">
-      {/* ─── Sidebar (Desktop) ─── */}
       <EmployeeSidebar 
         employeeName={employeeName} 
         onLogout={handleLogout}
         onCollapseChange={handleSidebarToggle}
       />
 
-      {/* ─── Main Content Wrapper ─── */}
       <div className={`flex-1 ${mainContentPadding} flex flex-col min-h-screen transition-all duration-300 ease-in-out`}>
-        {/* ── Due Date Popup ── */}
+        {/* ── Welcome Popup with BOTTOM MARGIN FIX ── */}
+        {showWelcomePopup && (
+          <div 
+            className="fixed inset-0 z-[2000] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fadeIn"
+            onClick={dismissWelcomePopup}
+          >
+            <div 
+              className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl animate-welcome-bounce relative mb-4 sm:mb-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={dismissWelcomePopup}
+                className="absolute top-2 sm:top-3 right-2 sm:right-3 p-1 sm:p-1.5 rounded-full hover:bg-gray-100 transition-all duration-200 hover:rotate-90 group z-10"
+                title="Close"
+              >
+                <FiX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
+              </button>
+
+              <div className="p-4 sm:p-6 text-center">
+                <div className="relative mb-3 sm:mb-4">
+                  <div className="absolute -top-8 -left-8 w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-full opacity-50 blur-2xl"></div>
+                  <div className="relative flex items-center justify-center">
+                    <div 
+                      onClick={dismissWelcomePopup}
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow-xl shadow-indigo-500/30 animate-float cursor-pointer hover:scale-110 transition-all duration-300 group"
+                      title="Click to dismiss"
+                    >
+                      <div className="flex flex-col items-center justify-center">
+                        <FiSmile className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+                        <span className="text-[5px] sm:text-[7px] text-white/90 font-medium mt-0.5 group-hover:scale-110 transition-transform">
+                          click me
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <h2 className="text-xl sm:text-3xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-1 sm:mb-2">
+                  Welcome Back!
+                </h2>
+
+                <p className="text-sm sm:text-base text-gray-600 mb-2 sm:mb-3">
+                  <span className="font-bold text-indigo-600">{employeeName}</span>
+                </p>
+
+                <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4 px-2">
+                  We're happy to see you again! Have a productive day ahead. 🎉
+                </p>
+
+                <div className="flex items-center justify-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                  <span className="text-[8px] sm:text-[10px] text-purple-500 font-medium animate-pulse">
+                    📍 Female voice speaking...
+                  </span>
+                </div>
+
+                <button
+                  onClick={dismissWelcomePopup}
+                  className="group px-4 sm:px-6 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-1.5 sm:gap-2 mx-auto"
+                >
+                  <FiSmile className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:rotate-12 transition-transform" />
+                  Let's Go!
+                </button>
+
+                <p className="text-[6px] sm:text-[8px] text-gray-400 mt-2">
+                  Click anywhere outside or click "Let's Go!" to dismiss
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Due Date Popup with BOTTOM MARGIN FIX ── */}
         {showDuePopup && dueTask && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
-            <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl animate-slideDown relative">
-              {/* Close Button */}
+            <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl animate-slideDown relative mb-4 sm:mb-8">
               <button
                 onClick={closePopup}
                 className="absolute top-2 sm:top-3 right-2 sm:right-3 p-1 sm:p-1.5 rounded-full hover:bg-gray-100 transition-all duration-200 hover:rotate-90 group"
@@ -325,7 +527,6 @@ function EmployeeDashboard() {
               </button>
 
               <div className="p-4 sm:p-6">
-                {/* Header with gradient icon */}
                 <div className="relative mb-3 sm:mb-4">
                   <div className="absolute -top-6 sm:-top-8 -left-6 sm:-left-8 w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-r from-amber-100 to-orange-100 rounded-full opacity-50 blur-2xl"></div>
                   <div className="relative flex items-center justify-center">
@@ -335,7 +536,6 @@ function EmployeeDashboard() {
                   </div>
                 </div>
 
-                {/* Title with gradient */}
                 <div className="text-center mb-3 sm:mb-4">
                   <h3 className="text-lg sm:text-2xl font-extrabold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
                     ⏰ Task Reminder!
@@ -350,7 +550,6 @@ function EmployeeDashboard() {
                   </div>
                 </div>
 
-                {/* Task Details Card */}
                 <div className="bg-gradient-to-br from-indigo-50/80 via-purple-50/80 to-pink-50/80 rounded-xl p-3 sm:p-4 mb-3 sm:mb-4 border border-white/50 shadow-inner">
                   <div className="space-y-2 sm:space-y-3">
                     <div>
@@ -385,14 +584,12 @@ function EmployeeDashboard() {
                   </div>
                 </div>
 
-                {/* Description */}
                 {dueTask.description && (
                   <p className="text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3 px-1 italic line-clamp-2">
                     "{dueTask.description}"
                   </p>
                 )}
 
-                {/* Message */}
                 <p className="text-[10px] sm:text-xs text-gray-500 mb-3 sm:mb-4 text-center">
                   {getDaysLeft(dueTask.dueDate) < 0 ? (
                     <span className="text-rose-600 font-semibold">⚠️ This task is overdue! Please complete it immediately.</span>
@@ -405,7 +602,6 @@ function EmployeeDashboard() {
                   )}
                 </p>
 
-                {/* Action Buttons */}
                 <div className="flex items-center justify-center gap-2">
                   <button
                     onClick={() => handleTaskClick(dueTask)}
@@ -447,7 +643,6 @@ function EmployeeDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-wrap">
-              {/* ─── My Notifications Button ─── */}
               <button
                 onClick={navigateToNotifications}
                 className="relative px-2 sm:px-3 lg:px-4 py-1 sm:py-1.5 lg:py-2 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-white/70 transition-all hover:scale-105 flex items-center gap-1 sm:gap-2"
@@ -475,16 +670,18 @@ function EmployeeDashboard() {
                 <FiLogOut className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4" />
                 <span className="hidden xs:inline">Logout</span>
               </button>
-              <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-[10px] sm:text-xs lg:text-sm shadow-lg shadow-indigo-500/30 flex-shrink-0">
+              <button
+                onClick={navigateToProfile}
+                className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-[10px] sm:text-xs lg:text-sm shadow-lg shadow-indigo-500/30 flex-shrink-0 hover:scale-105 transition-all cursor-pointer"
+              >
                 {getInitials(employeeName)}
-              </div>
+              </button>
             </div>
           </div>
         </header>
 
         {/* ── Scrollable Content ── */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8">
-          {/* ── Error Message ── */}
           {error && (
             <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-rose-50/80 backdrop-blur-sm border border-rose-200/50 
               rounded-xl flex items-center gap-2 sm:gap-3 text-rose-700 text-xs sm:text-sm">
@@ -493,9 +690,7 @@ function EmployeeDashboard() {
             </div>
           )}
 
-          {/* ── DASHBOARD VIEW ── */}
           <div className="space-y-4 sm:space-y-6">
-            {/* Loading State */}
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 sm:py-16 lg:py-20 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/30">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></div>
@@ -543,9 +738,80 @@ function EmployeeDashboard() {
                   />
                 </div>
 
+                {/* ── QUICK ACTIONS ── */}
+                <section className="rounded-xl sm:rounded-2xl p-4 sm:p-6">
+                  <div className="flex justify-between items-center mb-3 sm:mb-4">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center gap-1.5 sm:gap-2">
+                      <FiZap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
+                      Quick Actions
+                    </h2>
+                    <span className="text-[8px] sm:text-xs text-gray-400">Get things done</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <QuickActionCard 
+                      icon={<FiPlus className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      label="Add New Task"
+                      color="from-emerald-400 to-emerald-500"
+                      onClick={navigateToCreateTask}
+                    />
+                    
+                    <QuickActionCard 
+                      icon={<FiList className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      label="My Tasks"
+                      color="from-indigo-400 to-purple-500"
+                      onClick={navigateToMyTasks}
+                    />
+                  </div>
+                </section>
+
+                {/* Performance Metrics - Charts */}
+                <section className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/30 shadow-lg">
+                  <div className="flex justify-between items-center mb-4 sm:mb-6">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center gap-1.5 sm:gap-2">
+                      <FiTrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500" />
+                      Performance Metrics
+                    </h2>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="bg-white/30 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
+                      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 text-center">Task Statistics</h3>
+                      <div className="w-full h-[180px] sm:h-[200px] md:h-[240px] lg:h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={performanceData.slice(0, 4)} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 8 }} interval={0} />
+                            <YAxis tick={{ fontSize: 8 }} />
+                            <Tooltip content={<PerformanceTooltip />} />
+                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                              {performanceData.slice(0, 4).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="bg-white/30 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
+                      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 text-center">Performance Overview</h3>
+                      <div className="w-full h-[180px] sm:h-[200px] md:h-[240px] lg:h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={performanceData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                            <XAxis dataKey="name" tick={{ fontSize: 8 }} interval={0} />
+                            <YAxis tick={{ fontSize: 8 }} />
+                            <Tooltip content={<PerformanceTooltip />} />
+                            <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1', r: 3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
                 {/* Two columns - Upcoming & Recently Completed */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Upcoming tasks */}
                   <section className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/30 shadow-lg">
                     <div className="flex justify-between items-center mb-3 sm:mb-4">
                       <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center gap-1.5 sm:gap-2">
@@ -553,7 +819,7 @@ function EmployeeDashboard() {
                         Upcoming Deadlines
                       </h2>
                       <button 
-                        onClick={() => navigate('/my-task')}
+                        onClick={navigateToMyTasks}
                         className="text-[10px] sm:text-sm text-indigo-600 hover:text-indigo-800 font-medium 
                           flex items-center gap-0.5 sm:gap-1 hover:gap-1 sm:hover:gap-2 transition-all"
                       >
@@ -601,7 +867,6 @@ function EmployeeDashboard() {
                     )}
                   </section>
 
-                  {/* Recently Completed */}
                   <section className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/30 shadow-lg">
                     <div className="flex justify-between items-center mb-3 sm:mb-4">
                       <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center gap-1.5 sm:gap-2">
@@ -651,111 +916,140 @@ function EmployeeDashboard() {
                   </section>
                 </div>
 
-                {/* Priority breakdown */}
+                {/* Issues & Expenses Charts */}
                 <section className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/30 shadow-lg">
-                  <div className="flex justify-between items-center mb-3 sm:mb-4">
+                  <div className="flex justify-between items-center mb-4 sm:mb-6">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center gap-1.5 sm:gap-2">
+                      <FiBarChart2 className="w-4 h-4 sm:w-5 sm:h-5 text-rose-500" />
+                      Issues & Expenses Overview
+                    </h2>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="bg-white/30 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
+                      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 text-center">Distribution</h3>
+                      <div className="w-full h-[180px] sm:h-[200px] md:h-[240px] lg:h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={[
+                                { name: 'Issues', value: myReportedIssues || 1, color: '#ef4444' },
+                                { name: 'Expenses (₹)', value: Math.max(myExpenses / 100, 1), color: '#22c55e' }
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={35}
+                              outerRadius={55}
+                              paddingAngle={3}
+                              dataKey="value"
+                            >
+                              <Cell fill="#ef4444" />
+                              <Cell fill="#22c55e" />
+                            </Pie>
+                            <Tooltip content={<CustomTooltip />} />
+                            <Legend 
+                              verticalAlign="bottom" 
+                              height={30}
+                              formatter={(value) => <span className="text-[8px] sm:text-xs text-gray-700">{value}</span>}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="bg-white/30 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
+                      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 text-center">Values</h3>
+                      <div className="w-full h-[180px] sm:h-[200px] md:h-[240px] lg:h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={extraStatsData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 8 }} interval={0} />
+                            <YAxis tick={{ fontSize: 8 }} />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                              {extraStatsData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Priority Breakdown - Charts */}
+                <section className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/30 shadow-lg">
+                  <div className="flex justify-between items-center mb-4 sm:mb-6">
                     <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center gap-1.5 sm:gap-2">
                       <FiBarChart2 className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />
                       Priority Breakdown
                     </h2>
                     <button 
-                      onClick={() => navigate('/my-task')}
+                      onClick={navigateToMyTasks}
                       className="text-[10px] sm:text-sm text-indigo-600 hover:text-indigo-800 font-medium 
                         flex items-center gap-0.5 sm:gap-1 hover:gap-1 sm:hover:gap-2 transition-all"
                     >
                       View All <FiChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
-                    {Object.entries(priorityMeta).map(([key, m]) => {
-                      const cnt = priorityBreakdown[key] || 0;
-                      const pct = totalAssignedTasks ? Math.round((cnt / totalAssignedTasks) * 100) : 0;
-                      return (
-                        <div key={key} className="p-2.5 sm:p-4 bg-white/40 backdrop-blur-sm rounded-xl border border-white/30 hover:shadow-lg transition-all">
-                          <div className="flex justify-between items-center mb-1.5 sm:mb-2">
-                            <span className="text-[10px] sm:text-sm font-semibold flex items-center gap-0.5 sm:gap-1.5" style={{ color: m.color }}>
-                              {m.icon} <span className="hidden xs:inline">{key}</span>
-                            </span>
-                            <span className="text-xs sm:text-sm font-bold text-gray-700">{cnt}</span>
-                          </div>
-                          <div className="w-full h-1.5 sm:h-2 bg-gray-200/50 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{ width: `${pct}%`, background: m.color }}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="bg-white/30 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
+                      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 text-center">Task Distribution</h3>
+                      <div className="w-full h-[180px] sm:h-[200px] md:h-[240px] lg:h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={pieData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={35}
+                              outerRadius={55}
+                              paddingAngle={3}
+                              dataKey="value"
+                            >
+                              {pieData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip content={<CustomTooltip />} />
+                            <Legend 
+                              verticalAlign="bottom" 
+                              height={30}
+                              formatter={(value) => <span className="text-[8px] sm:text-xs text-gray-700">{value}</span>}
                             />
-                          </div>
-                          <div className="text-[8px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">{pct}%</div>
-                        </div>
-                      );
-                    })}
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="bg-white/30 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
+                      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 text-center">Priority Level Tasks</h3>
+                      <div className="w-full h-[180px] sm:h-[200px] md:h-[240px] lg:h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 5, left: 30, bottom: 5 }}>
+                            <XAxis type="number" tick={{ fontSize: 8 }} />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 8 }} width={50} />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'rgba(255,255,255,0.9)', 
+                                backdropFilter: 'blur(8px)',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255,255,255,0.3)',
+                                fontSize: '10px'
+                              }}
+                            />
+                            <Bar dataKey="tasks" radius={[0, 4, 4, 0]}>
+                              {barData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
                   </div>
                 </section>
-
-                {/* Quick Stats Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
-                  <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-white/30 shadow-lg flex items-center gap-2 sm:gap-4">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-r from-indigo-100 to-indigo-200 flex items-center justify-center flex-shrink-0">
-                      <FiAward className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-indigo-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[8px] sm:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Tasks Done</p>
-                      <p className="text-base sm:text-xl lg:text-2xl font-bold text-indigo-600">{completedTasks}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-white/30 shadow-lg flex items-center gap-2 sm:gap-4">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-r from-amber-100 to-amber-200 flex items-center justify-center flex-shrink-0">
-                      <FiTarget className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-amber-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[8px] sm:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Active Tasks</p>
-                      <p className="text-base sm:text-xl lg:text-2xl font-bold text-amber-600">{activeTasks}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-white/30 shadow-lg flex items-center gap-2 sm:gap-4">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-r from-emerald-100 to-emerald-200 flex items-center justify-center flex-shrink-0">
-                      <FiTrendingUp className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-emerald-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[8px] sm:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Completion</p>
-                      <p className="text-base sm:text-xl lg:text-2xl font-bold text-emerald-600">{completionRate}%</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-white/30 shadow-lg flex items-center gap-2 sm:gap-4">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-r from-purple-100 to-purple-200 flex items-center justify-center flex-shrink-0">
-                      <FaTasks className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-purple-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[8px] sm:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Created</p>
-                      <p className="text-base sm:text-xl lg:text-2xl font-bold text-purple-600">{myCreatedTasks}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Extra Stats - Issues & Expenses */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-                  <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-white/30 shadow-lg flex items-center gap-2 sm:gap-4">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-r from-rose-100 to-rose-200 flex items-center justify-center flex-shrink-0">
-                      <FiAlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-rose-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[8px] sm:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Reported Issues</p>
-                      <p className="text-base sm:text-xl lg:text-2xl font-bold text-rose-600">{myReportedIssues}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-white/30 shadow-lg flex items-center gap-2 sm:gap-4">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-r from-green-100 to-green-200 flex items-center justify-center flex-shrink-0">
-                      <FiDollarSign className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-green-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[8px] sm:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Total Expenses</p>
-                      <p className="text-base sm:text-xl lg:text-2xl font-bold text-green-600">₹{myExpenses.toLocaleString()}</p>
-                    </div>
-                  </div>
-                </div>
               </>
             )}
           </div>
@@ -775,9 +1069,21 @@ function EmployeeDashboard() {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.05); }
         }
+        @keyframes welcomeBounce {
+          0% { opacity: 0; transform: scale(0.3) rotate(-3deg); }
+          50% { opacity: 1; transform: scale(1.05) rotate(1deg); }
+          70% { transform: scale(0.95) rotate(-0.5deg); }
+          100% { transform: scale(1) rotate(0deg); }
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-10px) rotate(5deg); }
+        }
         .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
         .animate-slideDown { animation: slideDown 0.3s ease-out; }
         .animate-pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
+        .animate-welcome-bounce { animation: welcomeBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards; }
+        .animate-float { animation: float 3s ease-in-out infinite; }
 
         @media (max-width: 480px) {
           .xs\\:block { display: block; }

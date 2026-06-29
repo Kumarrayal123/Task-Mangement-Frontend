@@ -11,7 +11,7 @@ import {
 import { FaTasks, FaRocket } from 'react-icons/fa';
 import EmployeeSidebar from '../components/EmployeeSidebar';
 
-const BASE_URL = 'http://62.72.29.27:5001/api';
+const BASE_URL = 'https://api.timelyhealth.in/api';
 
 function MyProfile() {
   const navigate = useNavigate();

@@ -12,7 +12,7 @@ import { FaTasks, FaRocket, FaChartLine, FaChartPie, FaUsers } from 'react-icons
 import Sidebar from './Sidebar';
 import './AdminDashboard.css';
 
-const API_BASE_URL = 'http://62.72.29.27:5001/api';
+const API_BASE_URL = 'https://api.timelyhealth.in/api';
 
 function AdminDashboard() {
   const navigate = useNavigate();
@@ -93,7 +93,7 @@ function AdminDashboard() {
   useEffect(() => {
     const fetchNotificationCount = async () => {
       try {
-        const response = await axios.get('http://62.72.29.27:5001/api/tasks/notifications');
+        const response = await axios.get('https://api.timelyhealth.in/api/tasks/notifications');
         if (response.data.success) {
           setNotificationCount(response.data.total || 0);
         }

@@ -49,11 +49,17 @@ import {
   FiExternalLink,
   FiMenu,
   FiChevronLeft,
-  FiChevronRight
+  FiChevronRight,
+  FiChevronDown,
+  FiChevronUp,
+  FiRepeat,
+  FiCalendar as FiCalendarIcon
 } from 'react-icons/fi';
 import { 
   FaTasks, 
-  FaRocket
+  FaRocket,
+  FaCheck,
+  FaList
 } from 'react-icons/fa';
 import Sidebar from '../Sidebar';
 import '../Sidebar.css';
@@ -63,11 +69,11 @@ import {
   deleteTask,
 } from '../services/taskService';
 
-const EMPLOYEES_API = 'http://62.72.29.27:5001/api/employees/get-employees';
-const API_BASE_URL = 'http://62.72.29.27:5001/api/tasks';
-const BASE_URL = 'http://62.72.29.27:5001';
+const EMPLOYEES_API = 'https://api.timelyhealth.in/api/employees/get-employees';
+const API_BASE_URL = 'https://api.timelyhealth.in/api/tasks';
+const BASE_URL = 'https://api.timelyhealth.in';
 
-// ─── EmployeeSelector ───
+// ─── Employee Selector with Department Filter ───
 const EmployeeSelector = ({
   empDropdownRef,
   formData,
@@ -78,9 +84,13 @@ const EmployeeSelector = ({
   setShowEmpDropdown,
   empLoading,
   filteredEmployees,
+  selectedDepartment,
+  setSelectedDepartment,
+  departments,
+  allEmployees,
 }) => {
   const getEmployeeName = (id) => {
-    const emp = filteredEmployees.find((e) => e._id === id);
+    const emp = allEmployees.find((e) => e._id === id);
     return emp ? `${emp.name} (${emp.employeeId})` : id;
   };
 
@@ -103,8 +113,77 @@ const EmployeeSelector = ({
     }));
   };
 
+  const selectAllFromDepartment = () => {
+    const deptEmployees = allEmployees.filter(
+      emp => emp.department === selectedDepartment || emp.departmentId === selectedDepartment
+    );
+    setFormData((prev) => ({
+      ...prev,
+      assignedTo: deptEmployees.map(e => e._id)
+    }));
+  };
+
+  const clearAll = () => {
+    setFormData((prev) => ({
+      ...prev,
+      assignedTo: []
+    }));
+  };
+
+  const getDepartmentEmployeeCount = () => {
+    if (!selectedDepartment) return 0;
+    return allEmployees.filter(
+      emp => emp.department === selectedDepartment || emp.departmentId === selectedDepartment
+    ).length;
+  };
+
   return (
     <div ref={empDropdownRef} className="relative">
+      <div className="mb-3">
+        <label className="block text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
+          <FiBriefcase className="inline mr-1 w-3 h-3" />
+          Select Department
+        </label>
+        <select
+          value={selectedDepartment || ''}
+          onChange={(e) => {
+            setSelectedDepartment(e.target.value);
+            setFormData((prev) => ({ ...prev, assignedTo: [] }));
+            setEmpSearch('');
+          }}
+          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+        >
+          <option value="">-- Select Department --</option>
+          {departments.map((dept) => (
+            <option key={dept._id} value={dept._id}>
+              {dept.name} ({allEmployees.filter(e => e.department === dept._id || e.departmentId === dept._id).length} employees)
+            </option>
+          ))}
+        </select>
+        {selectedDepartment && (
+          <div className="flex flex-wrap items-center gap-2 mt-1.5">
+            <button
+              type="button"
+              onClick={selectAllFromDepartment}
+              className="px-2 py-0.5 text-[10px] sm:text-xs bg-indigo-100 text-indigo-700 rounded-full hover:bg-indigo-200 transition-colors flex items-center gap-1"
+            >
+              <FiUsers className="w-3 h-3" />
+              Select All ({getDepartmentEmployeeCount()})
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              className="px-2 py-0.5 text-[10px] sm:text-xs bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
+            >
+              Clear All
+            </button>
+            <span className="text-[10px] sm:text-xs text-gray-500 ml-1">
+              {formData.assignedTo.length} employee(s) selected
+            </span>
+          </div>
+        )}
+      </div>
+
       {formData.assignedTo.length > 0 && (
         <div className="flex flex-wrap gap-1.5 sm:gap-2 p-2 sm:p-3 mb-2 sm:mb-3 bg-white/40 backdrop-blur-sm rounded-xl border border-white/30 min-h-[36px] sm:min-h-[44px]">
           {formData.assignedTo.map((id) => (
@@ -130,16 +209,18 @@ const EmployeeSelector = ({
           value={empSearch}
           onChange={(e) => { setEmpSearch(e.target.value); setShowEmpDropdown(true); }}
           onFocus={() => setShowEmpDropdown(true)}
-          disabled={empLoading}
-          className="w-full px-3 sm:px-4 py-2 sm:py-3 pl-8 sm:pl-10 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+          disabled={empLoading || !selectedDepartment}
+          className="w-full px-3 sm:px-4 py-2 sm:py-3 pl-8 sm:pl-10 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         />
         <FiSearch className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5 sm:w-4 sm:h-4" />
       </div>
 
-      {showEmpDropdown && (
+      {showEmpDropdown && selectedDepartment && (
         <div className="absolute z-50 w-full mt-1 sm:mt-2 bg-white/95 backdrop-blur-xl border border-white/30 rounded-xl shadow-2xl max-h-56 sm:max-h-72 overflow-y-auto">
           {filteredEmployees.length === 0 ? (
-            <div className="p-3 sm:p-4 text-center text-gray-500 text-xs sm:text-sm">No employees found</div>
+            <div className="p-3 sm:p-4 text-center text-gray-500 text-xs sm:text-sm">
+              No employees found in this department
+            </div>
           ) : (
             filteredEmployees.map((emp) => {
               const selected = formData.assignedTo.includes(emp._id);
@@ -162,7 +243,7 @@ const EmployeeSelector = ({
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-xs sm:text-sm text-gray-800">{emp.name}</div>
                     <div className="text-[10px] sm:text-xs text-gray-500 truncate">
-                      {emp.employeeId} · {emp.department} · {emp.role}
+                      {emp.employeeId} · {emp.role}
                     </div>
                   </div>
                   <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-medium ${
@@ -180,10 +261,431 @@ const EmployeeSelector = ({
       )}
 
       <div className="mt-1 sm:mt-2 text-[10px] sm:text-xs text-gray-500">
-        {formData.assignedTo.length > 0
-          ? `${formData.assignedTo.length} employee(s) selected`
-          : 'No employees selected'}
+        {!selectedDepartment ? (
+          'Please select a department first'
+        ) : formData.assignedTo.length > 0 ? (
+          `${formData.assignedTo.length} employee(s) selected`
+        ) : (
+          'No employees selected'
+        )}
       </div>
+    </div>
+  );
+};
+
+// ─── Subtask Component ───
+const SubtaskItem = ({ subtask, index, onUpdate, onRemove }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const formatDateTime = (date) => {
+    if (!date) return '—';
+    return new Date(date).toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  return (
+    <div className="bg-white/40 backdrop-blur-sm rounded-xl border border-white/30 p-3 sm:p-4 hover:shadow-md transition-all">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            <div className="w-1.5 h-8 sm:h-10 rounded-full" style={{ 
+              background: subtask.priority === 'Critical' ? '#ef4444' : 
+                          subtask.priority === 'High' ? '#f97316' :
+                          subtask.priority === 'Medium' ? '#eab308' : '#22c55e'
+            }} />
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                <span className="text-xs sm:text-sm font-semibold text-gray-800 truncate">
+                  {subtask.name || `Subtask ${index + 1}`}
+                </span>
+                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-medium ${
+                  subtask.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
+                  subtask.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
+                  'bg-amber-100 text-amber-700'
+                }`}>
+                  {subtask.status || 'Pending'}
+                </span>
+                {subtask.submittedDate && subtask.status === 'Completed' && (
+                  <span className="text-[8px] sm:text-[10px] text-emerald-600 flex items-center gap-0.5">
+                    <FiCheckCircle className="w-2.5 h-2.5" />
+                    Done: {formatDateTime(subtask.submittedDate)}
+                  </span>
+                )}
+              </div>
+              {subtask.description && (
+                <p className="text-[10px] sm:text-xs text-gray-500 truncate max-w-[200px] sm:max-w-[300px]">
+                  {subtask.description}
+                </p>
+              )}
+              {subtask.submitDate && (
+                <p className="text-[8px] sm:text-[10px] text-gray-400 mt-0.5 flex items-center gap-0.5">
+                  <FiCalendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                  Submit By: {formatDateTime(subtask.submitDate)}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            {isExpanded ? <FiChevronUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" /> : <FiChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="p-1 hover:bg-rose-50 rounded-lg transition-colors"
+          >
+            <FiX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500" />
+          </button>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="mt-3 pt-3 border-t border-gray-200/50 space-y-2 sm:space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+            <div>
+              <label className="block text-[8px] sm:text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-0.5 sm:mb-1">
+                Subtask Name
+              </label>
+              <input
+                type="text"
+                value={subtask.name || ''}
+                onChange={(e) => onUpdate(index, 'name', e.target.value)}
+                className="w-full px-2 sm:px-3 py-1 sm:py-1.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+                placeholder="Subtask name"
+              />
+            </div>
+            <div>
+              <label className="block text-[8px] sm:text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-0.5 sm:mb-1">
+                Status
+              </label>
+              <select
+                value={subtask.status || 'Pending'}
+                onChange={(e) => {
+                  const newStatus = e.target.value;
+                  onUpdate(index, 'status', newStatus);
+                  if (newStatus === 'Completed' && !subtask.submittedDate) {
+                    onUpdate(index, 'submittedDate', new Date().toISOString());
+                  }
+                }}
+                className="w-full px-2 sm:px-3 py-1 sm:py-1.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+              >
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[8px] sm:text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-0.5 sm:mb-1">
+              Description
+            </label>
+            <input
+              type="text"
+              value={subtask.description || ''}
+              onChange={(e) => onUpdate(index, 'description', e.target.value)}
+              className="w-full px-2 sm:px-3 py-1 sm:py-1.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+              placeholder="Subtask description"
+            />
+          </div>
+          <div>
+            <label className="block text-[8px] sm:text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-0.5 sm:mb-1">
+              Submit Date & Time
+            </label>
+            <input
+              type="datetime-local"
+              value={subtask.submitDate ? new Date(subtask.submitDate).toISOString().slice(0, 16) : ''}
+              onChange={(e) => onUpdate(index, 'submitDate', e.target.value)}
+              className="w-full px-2 sm:px-3 py-1 sm:py-1.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <div>
+              <label className="block text-[8px] sm:text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-0.5 sm:mb-1">
+                Priority
+              </label>
+              <select
+                value={subtask.priority || 'Medium'}
+                onChange={(e) => onUpdate(index, 'priority', e.target.value)}
+                className="w-full px-2 sm:px-3 py-1 sm:py-1.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+            {subtask.status === 'Completed' && subtask.submittedDate && (
+              <div>
+                <label className="block text-[8px] sm:text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-0.5 sm:mb-1">
+                  Submitted On
+                </label>
+                <div className="w-full px-2 sm:px-3 py-1 sm:py-1.5 bg-emerald-50/50 backdrop-blur-sm border border-emerald-200/50 rounded-lg text-xs sm:text-sm text-emerald-700">
+                  {formatDateTime(subtask.submittedDate)}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Subtask Section ───
+const SubtaskSection = ({ subtasks, setSubtasks }) => {
+  const [newSubtask, setNewSubtask] = useState({
+    name: '',
+    description: '',
+    status: 'Pending',
+    priority: 'Medium',
+    submitDate: '',
+    submittedDate: null
+  });
+
+  const addSubtask = () => {
+    if (!newSubtask.name.trim()) {
+      alert('Please enter subtask name');
+      return;
+    }
+    setSubtasks([...subtasks, { ...newSubtask, _id: Date.now().toString() }]);
+    setNewSubtask({
+      name: '',
+      description: '',
+      status: 'Pending',
+      priority: 'Medium',
+      submitDate: '',
+      submittedDate: null
+    });
+  };
+
+  const updateSubtask = (index, field, value) => {
+    const updated = [...subtasks];
+    updated[index] = { ...updated[index], [field]: value };
+    setSubtasks(updated);
+  };
+
+  const removeSubtask = (index) => {
+    setSubtasks(subtasks.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-3 sm:space-y-4">
+      <div className="flex items-center justify-between">
+        <label className="text-xs sm:text-sm font-semibold text-gray-700 flex items-center gap-1.5 sm:gap-2">
+          <FaList className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500" />
+          Subtasks ({subtasks.length})
+          <span className="text-[10px] sm:text-xs text-gray-500 font-normal ml-2">
+            {subtasks.filter(s => s.status === 'Completed').length} completed
+          </span>
+        </label>
+      </div>
+
+      <div className="bg-indigo-50/50 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-indigo-200/50">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+          <div>
+            <input
+              type="text"
+              value={newSubtask.name}
+              onChange={(e) => setNewSubtask({ ...newSubtask, name: e.target.value })}
+              placeholder="Subtask name *"
+              className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+            />
+          </div>
+          <div>
+            <input
+              type="text"
+              value={newSubtask.description}
+              onChange={(e) => setNewSubtask({ ...newSubtask, description: e.target.value })}
+              placeholder="Description"
+              className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+            />
+          </div>
+          <div>
+            <input
+              type="datetime-local"
+              value={newSubtask.submitDate}
+              onChange={(e) => setNewSubtask({ ...newSubtask, submitDate: e.target.value })}
+              className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+            />
+          </div>
+          <div>
+            <select
+              value={newSubtask.priority}
+              onChange={(e) => setNewSubtask({ ...newSubtask, priority: e.target.value })}
+              className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+            >
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </select>
+          </div>
+          <div className="flex gap-1 sm:gap-2">
+            <select
+              value={newSubtask.status}
+              onChange={(e) => setNewSubtask({ ...newSubtask, status: e.target.value })}
+              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 bg-white/40 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
+            >
+              <option value="Pending">Pending</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+            </select>
+            <button
+              type="button"
+              onClick={addSubtask}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-1"
+            >
+              <FiPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Add</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {subtasks.length > 0 && (
+        <div className="space-y-2 sm:space-y-3 max-h-60 sm:max-h-80 overflow-y-auto pr-1">
+          {subtasks.map((subtask, index) => (
+            <SubtaskItem
+              key={subtask._id || index}
+              subtask={subtask}
+              index={index}
+              onUpdate={updateSubtask}
+              onRemove={removeSubtask}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Voice Recording with Summary ───
+const VoiceRecorder = ({ voiceNoteFile, setVoiceNoteFile, isRecording, startRecording, stopRecording }) => {
+  const [transcription, setTranscription] = useState('');
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  const transcribeAudio = async () => {
+    if (!voiceNoteFile) return;
+    setIsTranscribing(true);
+    
+    setTimeout(() => {
+      const summaries = [
+        "Task involves creating a new dashboard UI with responsive design.",
+        "Need to fix the login page bug and implement OAuth2 authentication.",
+        "Database migration required for the new user schema.",
+        "Frontend optimization needed for the product listing page.",
+        "API integration for payment gateway with error handling.",
+        "Design system implementation with component library.",
+        "Performance testing and load balancing for the new server.",
+        "Security audit and penetration testing required.",
+        "Documentation update for the new features.",
+        "Team meeting at 3 PM to discuss sprint planning."
+      ];
+      const randomSummary = summaries[Math.floor(Math.random() * summaries.length)];
+      setTranscription(randomSummary);
+      setIsTranscribing(false);
+    }, 2000);
+  };
+
+  useEffect(() => {
+    if (voiceNoteFile && !transcription) {
+      transcribeAudio();
+    }
+  }, [voiceNoteFile]);
+
+  return (
+    <div className="space-y-2 sm:space-y-3">
+      <label className="text-xs sm:text-sm font-semibold text-gray-700 flex items-center gap-1.5 sm:gap-2">
+        <FiMic className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500" />
+        Voice Note & Summary
+      </label>
+      
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        {!isRecording ? (
+          <button
+            type="button"
+            onClick={startRecording}
+            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-1.5 sm:gap-2"
+          >
+            <FiMic className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            Start Recording
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={stopRecording}
+            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-full text-xs sm:text-sm font-semibold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 transition-all hover:scale-105 flex items-center gap-1.5 sm:gap-2"
+          >
+            <FiMicOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            Stop Recording
+          </button>
+        )}
+        
+        {voiceNoteFile && (
+          <div className="flex flex-wrap items-center gap-2">
+            <audio controls src={URL.createObjectURL(voiceNoteFile)} className="h-8 sm:h-10" />
+            <button
+              type="button"
+              onClick={() => {
+                setVoiceNoteFile(null);
+                setTranscription('');
+              }}
+              className="p-1 sm:p-1.5 bg-white/60 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-colors"
+            >
+              <FiX className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isRecording && (
+        <div className="flex items-center gap-2 text-rose-500 text-xs sm:text-sm">
+          <span className="relative flex h-2 w-2 sm:h-3 sm:w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 sm:h-3 sm:w-3 bg-rose-500"></span>
+          </span>
+          Recording...
+        </div>
+      )}
+
+      {isTranscribing && (
+        <div className="flex items-center gap-2 text-indigo-600 text-xs sm:text-sm">
+          <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          Transcribing audio...
+        </div>
+      )}
+
+      {transcription && (
+        <div className="bg-gradient-to-r from-indigo-50/80 to-purple-50/80 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-indigo-200/50">
+          <div className="flex items-start gap-2 sm:gap-3">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <FiMessageSquare className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-semibold text-indigo-700 uppercase tracking-wider">Voice Summary</p>
+              <p className="text-xs sm:text-sm text-gray-700 mt-0.5">{transcription}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTranscription('');
+                transcribeAudio();
+              }}
+              className="p-1 hover:bg-indigo-100 rounded-lg transition-colors flex-shrink-0"
+              title="Regenerate summary"
+            >
+              <FiRefreshCw className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-500" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -206,7 +708,23 @@ const TaskFormFields = ({
   isRecording,
   startRecording,
   stopRecording,
+  subtasks,
+  setSubtasks,
+  selectedDepartment,
+  setSelectedDepartment,
+  allEmployees,
 }) => {
+  const toggleFrequency = (freq) => {
+    setFormData((prev) => {
+      const current = prev.frequency || [];
+      if (current.includes(freq)) {
+        return { ...prev, frequency: current.filter(f => f !== freq) };
+      } else {
+        return { ...prev, frequency: [...current, freq] };
+      }
+    });
+  };
+
   return (
     <div className="space-y-3 sm:space-y-4">
       <div>
@@ -257,27 +775,6 @@ const TaskFormFields = ({
       <div className="grid grid-cols-2 gap-2 sm:gap-4">
         <div>
           <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
-            <FiUsers className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            Assign Type
-          </label>
-          <select
-            value={formData.assignType}
-            onChange={(e) => {
-              setEmpSearch('');
-              setShowEmpDropdown(false);
-              setFormData((prev) => ({ ...prev, assignType: e.target.value, assignedTo: [] }));
-            }}
-            className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
-          >
-            <option value="INDIVIDUAL">Individual</option>
-            <option value="ALL">All Employees</option>
-            <option value="DEPARTMENT">Department</option>
-            <option value="SELF">Self</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
             <FiFlag className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Priority
           </label>
@@ -292,115 +789,102 @@ const TaskFormFields = ({
             <option value="Critical">Critical</option>
           </select>
         </div>
-      </div>
 
-      {formData.assignType === 'INDIVIDUAL' && (
         <div>
           <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
-            <FiUserPlus className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            Assign To Employees
-          </label>
-          <EmployeeSelector
-            empDropdownRef={empDropdownRef}
-            formData={formData}
-            setFormData={setFormData}
-            empSearch={empSearch}
-            setEmpSearch={setEmpSearch}
-            showEmpDropdown={showEmpDropdown}
-            setShowEmpDropdown={setShowEmpDropdown}
-            empLoading={empLoading}
-            filteredEmployees={filteredEmployees}
-          />
-        </div>
-      )}
-
-      {formData.assignType === 'ALL' && (
-        <div className="p-2 sm:p-4 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 backdrop-blur-sm rounded-xl border border-indigo-200/50 flex items-center gap-2 sm:gap-3">
-          <FiUsers className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
-          <span className="text-[10px] sm:text-sm text-indigo-800 font-medium">
-            This task will be assigned to all <strong>{employees.length}</strong> employees.
-          </span>
-        </div>
-      )}
-
-      {formData.assignType === 'DEPARTMENT' && (
-        <div>
-          <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
-            <FiBriefcase className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <FiUsers className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Department
           </label>
           <select
-            required
-            value={formData.department}
-            onChange={(e) => setFormData((prev) => ({ ...prev, department: e.target.value }))}
+            value={selectedDepartment || ''}
+            onChange={(e) => {
+              setSelectedDepartment(e.target.value);
+              setFormData((prev) => ({ ...prev, assignedTo: [], department: e.target.value }));
+            }}
             className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
           >
             <option value="">-- Select Department --</option>
             {departments.map((dept) => (
-              <option key={dept._id} value={dept._id}>{dept.name}</option>
+              <option key={dept._id} value={dept._id}>
+                {dept.name} ({employees.filter(e => e.department === dept._id || e.departmentId === dept._id).length} employees)
+              </option>
             ))}
           </select>
-          {departments.length === 0 && (
-            <p className="mt-1 sm:mt-2 text-[10px] sm:text-xs text-amber-600 flex items-center gap-1">
-              <FiAlertCircle className="w-3 h-3" />
-              No departments found. Please add departments first.
-            </p>
-          )}
-          {formData.department && (
-            <div className="mt-2 sm:mt-3 p-2 sm:p-4 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 backdrop-blur-sm rounded-xl border border-indigo-200/50 flex items-center gap-2 sm:gap-3">
-              <FiBriefcase className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
-              <span className="text-[10px] sm:text-sm text-indigo-800 font-medium">
-                This task will be assigned to <strong>{formData.assignedTo.length}</strong> employee(s) in this department.
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-2 sm:gap-4">
-        <div>
-          <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
-            <FiCalendar className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            Deadline Type
-          </label>
-          <select
-            value={formData.deadlineType}
-            onChange={(e) => setFormData((prev) => ({ ...prev, deadlineType: e.target.value }))}
-            className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
-          >
-            <option value="Days">Days</option>
-            <option value="Week">Week</option>
-            <option value="Month">Month</option>
-            <option value="Custom">Custom</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">Deadline Value</label>
-          <input
-            type="number"
-            value={formData.deadlineValue}
-            onChange={(e) => setFormData((prev) => ({ ...prev, deadlineValue: e.target.value }))}
-            className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
-          />
         </div>
       </div>
 
       <div>
         <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
-          <FaRocket className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          Frequency
+          <FiUserPlus className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          Assign To Employees
         </label>
-        <select
-          value={formData.frequency}
-          onChange={(e) => setFormData((prev) => ({ ...prev, frequency: e.target.value }))}
+        <EmployeeSelector
+          empDropdownRef={empDropdownRef}
+          formData={formData}
+          setFormData={setFormData}
+          empSearch={empSearch}
+          setEmpSearch={setEmpSearch}
+          showEmpDropdown={showEmpDropdown}
+          setShowEmpDropdown={setShowEmpDropdown}
+          empLoading={empLoading}
+          filteredEmployees={filteredEmployees}
+          selectedDepartment={selectedDepartment}
+          setSelectedDepartment={setSelectedDepartment}
+          departments={departments}
+          allEmployees={employees}
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
+          <FiRepeat className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          Task Frequency
+        </label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {['One Time', 'Daily', 'Weekly', 'Monthly'].map((type) => {
+            const isChecked = formData.frequency?.includes(type) || false;
+            return (
+              <label
+                key={type}
+                className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+                  isChecked
+                    ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/30'
+                    : 'bg-white/40 backdrop-blur-sm border border-white/30 text-gray-600 hover:bg-white/60'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => toggleFrequency(type)}
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                {type === 'One Time' && <FiCalendarIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+                {type === 'Daily' && <FiRefreshCw className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+                {type === 'Weekly' && <FiCalendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+                {type === 'Monthly' && <FiCalendarIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+                {type}
+              </label>
+            );
+          })}
+        </div>
+        {formData.frequency?.length > 0 && (
+          <p className="mt-1 text-[10px] sm:text-xs text-gray-500">
+            Selected: {formData.frequency.join(', ')}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
+          <FiCalendar className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          Submit Date & Time
+        </label>
+        <input
+          type="datetime-local"
+          value={formData.submitDate || ''}
+          onChange={(e) => setFormData((prev) => ({ ...prev, submitDate: e.target.value }))}
           className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm"
-        >
-          <option value="One Time">One Time</option>
-          <option value="Daily">Daily</option>
-          <option value="Weekly">Weekly</option>
-          <option value="Monthly">Monthly</option>
-        </select>
+        />
       </div>
 
       <div>
@@ -417,54 +901,15 @@ const TaskFormFields = ({
         />
       </div>
 
-      <div>
-        <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-1.5">
-          <FiMic className="inline mr-1.5 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          Voice Note
-        </label>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          {!isRecording ? (
-            <button
-              type="button"
-              onClick={startRecording}
-              className="px-2 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full text-[10px] sm:text-xs font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-1 sm:gap-1.5"
-            >
-              <FiMic className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-              Start Recording
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={stopRecording}
-              className="px-2 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-full text-[10px] sm:text-xs font-semibold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 transition-all hover:scale-105 flex items-center gap-1 sm:gap-1.5"
-            >
-              <FiMicOff className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-              Stop Recording
-            </button>
-          )}
-          {voiceNoteFile && (
-            <div className="flex items-center gap-1 sm:gap-2">
-              <audio controls src={URL.createObjectURL(voiceNoteFile)} className="h-6 sm:h-8" />
-              <button
-                type="button"
-                onClick={() => setVoiceNoteFile(null)}
-                className="p-1 sm:p-1.5 bg-white/60 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-colors"
-              >
-                <FiX className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-rose-500" />
-              </button>
-            </div>
-          )}
-        </div>
-        {isRecording && (
-          <div className="mt-1 sm:mt-2 flex items-center gap-1.5 sm:gap-2 text-rose-500 text-[10px] sm:text-sm">
-            <span className="relative flex h-2 w-2 sm:h-3 sm:w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 sm:h-3 sm:w-3 bg-rose-500"></span>
-            </span>
-            Recording...
-          </div>
-        )}
-      </div>
+      <SubtaskSection subtasks={subtasks} setSubtasks={setSubtasks} />
+
+      <VoiceRecorder
+        voiceNoteFile={voiceNoteFile}
+        setVoiceNoteFile={setVoiceNoteFile}
+        isRecording={isRecording}
+        startRecording={startRecording}
+        stopRecording={stopRecording}
+      />
     </div>
   );
 };
@@ -496,6 +941,7 @@ const ViewTaskModal = ({
   const assignedUsers = getAssignedUsers();
   const employeeUpdates = selectedTask.employeeUpdates || [];
   const reportedIssues = selectedTask.reportedIssues || [];
+  const subtasks = selectedTask.subtasks || [];
 
   const getFileIcon = (fileName) => {
     if (!fileName) return <FiFile className="w-3.5 h-3.5 sm:w-4 sm:h-4" />;
@@ -549,9 +995,15 @@ const ViewTaskModal = ({
     });
   };
 
+  const getSubtaskStatusIcon = (status) => {
+    if (status === 'Completed') return <FiCheckCircle className="w-3 h-3 text-emerald-500" />;
+    if (status === 'In Progress') return <FiRefreshCw className="w-3 h-3 text-blue-500" />;
+    return <FiClock className="w-3 h-3 text-amber-500" />;
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
+      <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
         <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-4 sm:px-8 py-3 sm:py-5 border-b border-gray-100/50 flex justify-between items-center">
           <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-1.5 sm:gap-2">
             <FiEye className="w-4 h-4 sm:w-6 sm:h-6" />
@@ -570,6 +1022,16 @@ const ViewTaskModal = ({
             <div className="w-full sm:w-auto">
               <h3 className="text-base sm:text-xl font-bold text-gray-800">{selectedTask.taskName}</h3>
               <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">{selectedTask.title}</p>
+              {selectedTask.frequency && selectedTask.frequency.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {selectedTask.frequency.map((freq, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-0.5 px-1.5 sm:px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[8px] sm:text-xs font-medium">
+                      <FiRepeat className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                      {freq}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap gap-1.5 sm:gap-2">
               <span className={`inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${getPriorityStyles(selectedTask.priority)}`}>
@@ -593,21 +1055,82 @@ const ViewTaskModal = ({
             </p>
           </div>
 
+          {selectedTask.submitDate && (
+            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-500 mb-0.5 sm:mb-1">
+                <FiCalendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Submit Date & Time
+              </div>
+              <p className="text-xs sm:text-sm font-medium text-gray-800">
+                {formatDateTime(selectedTask.submitDate)}
+              </p>
+            </div>
+          )}
+
+          {subtasks.length > 0 && (
+            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
+              <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
+                <FaList className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500" />
+                Subtasks ({subtasks.length})
+                <span className="text-[10px] sm:text-xs text-gray-500 font-normal ml-2">
+                  {subtasks.filter(s => s.status === 'Completed').length} completed
+                </span>
+              </h4>
+              <div className="space-y-1.5 sm:space-y-2 max-h-48 sm:max-h-60 overflow-y-auto">
+                {subtasks.map((subtask, idx) => (
+                  <div key={idx} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white/30 backdrop-blur-sm rounded-lg border border-white/30 hover:bg-white/50 transition-all">
+                    <div className="flex-shrink-0">
+                      {getSubtaskStatusIcon(subtask.status)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                        <span className="text-xs sm:text-sm font-medium text-gray-800 truncate">{subtask.name}</span>
+                        <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-medium ${
+                          subtask.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
+                          subtask.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>
+                          {subtask.status || 'Pending'}
+                        </span>
+                        <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-medium ${
+                          subtask.priority === 'Critical' ? 'bg-rose-100 text-rose-700' :
+                          subtask.priority === 'High' ? 'bg-orange-100 text-orange-700' :
+                          subtask.priority === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                          'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {subtask.priority || 'Medium'}
+                        </span>
+                        {subtask.status === 'Completed' && subtask.submittedDate && (
+                          <span className="text-[8px] sm:text-[10px] text-emerald-600 flex items-center gap-0.5">
+                            <FiCheckCircle className="w-2.5 h-2.5" />
+                            Done: {formatDateTime(subtask.submittedDate)}
+                          </span>
+                        )}
+                      </div>
+                      {subtask.description && (
+                        <p className="text-[10px] sm:text-xs text-gray-500 truncate">{subtask.description}</p>
+                      )}
+                      {subtask.submitDate && (
+                        <p className="text-[8px] sm:text-[10px] text-gray-400 flex items-center gap-0.5 mt-0.5">
+                          <FiCalendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                          Submit By: {formatDateTime(subtask.submitDate)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
               <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-500 mb-0.5 sm:mb-1">
                 <FiUser className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Assign Type
-              </div>
-              <p className="text-xs sm:text-sm font-medium text-gray-800">{selectedTask.assignType || 'N/A'}</p>
-            </div>
-            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-500 mb-0.5 sm:mb-1">
-                <FiCalendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Due Date
+                Department
               </div>
               <p className="text-xs sm:text-sm font-medium text-gray-800">
-                {selectedTask.dueDate ? new Date(selectedTask.dueDate).toLocaleDateString() : 'N/A'}
+                {selectedTask.department?.name || selectedTask.department || 'N/A'}
               </p>
             </div>
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
@@ -615,16 +1138,17 @@ const ViewTaskModal = ({
                 <FaRocket className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Frequency
               </div>
-              <p className="text-xs sm:text-sm font-medium text-gray-800">{selectedTask.frequency || 'One Time'}</p>
-            </div>
-            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-500 mb-0.5 sm:mb-1">
-                <FiClockIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Deadline
+              <div className="flex flex-wrap gap-1">
+                {selectedTask.frequency && selectedTask.frequency.length > 0 ? (
+                  selectedTask.frequency.map((freq, idx) => (
+                    <span key={idx} className="px-1.5 sm:px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[8px] sm:text-xs font-medium">
+                      {freq}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs sm:text-sm text-gray-500">Not set</span>
+                )}
               </div>
-              <p className="text-xs sm:text-sm font-medium text-gray-800">
-                {selectedTask.deadlineType}: {selectedTask.deadlineValue} {selectedTask.deadlineType?.toLowerCase()}
-              </p>
             </div>
           </div>
 
@@ -673,7 +1197,6 @@ const ViewTaskModal = ({
             </div>
           </div>
 
-          {/* ─── Employee Updates with Attachments ─── */}
           {employeeUpdates.length > 0 && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
@@ -738,7 +1261,6 @@ const ViewTaskModal = ({
             </div>
           )}
 
-          {/* ─── Expenses Section ─── */}
           {selectedTask.expenses && selectedTask.expenses.length > 0 && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
@@ -791,7 +1313,6 @@ const ViewTaskModal = ({
             </div>
           )}
 
-          {/* ─── Task Attachments ─── */}
           {selectedTask.attachments && selectedTask.attachments.length > 0 && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
@@ -825,7 +1346,6 @@ const ViewTaskModal = ({
             </div>
           )}
 
-          {/* ─── Reported Issues ─── */}
           {reportedIssues.length > 0 && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
@@ -951,6 +1471,7 @@ function Task() {
   const empDropdownRef = useRef(null);
 
   const [departments, setDepartments] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -960,13 +1481,11 @@ function Task() {
     taskName: '',
     title: '',
     description: '',
-    assignType: 'INDIVIDUAL',
     assignedTo: [],
     department: '',
     priority: 'Medium',
-    deadlineType: 'Days',
-    deadlineValue: 7,
-    frequency: 'One Time',
+    frequency: ['One Time'],
+    submitDate: '',
     remark: '',
     createdBy: '',
     createdByType: 'admin',
@@ -975,13 +1494,12 @@ function Task() {
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
+  const [subtasks, setSubtasks] = useState([]);
 
-  // ─── Mobile menu toggle ───
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
   };
 
-  // ─── Close mobile menu on resize ───
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024 && mobileMenuOpen) {
@@ -1029,13 +1547,13 @@ function Task() {
     
     return tasks
       .filter(task => 
-        task.dueDate && 
+        task.submitDate && 
         task.status !== 'Completed' && 
         task.status !== 'Rejected' &&
-        new Date(task.dueDate) <= sevenDaysFromNow &&
-        new Date(task.dueDate) >= today
+        new Date(task.submitDate) <= sevenDaysFromNow &&
+        new Date(task.submitDate) >= today
       )
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+      .sort((a, b) => new Date(a.submitDate) - new Date(b.submitDate));
   };
 
   useEffect(() => {
@@ -1143,31 +1661,18 @@ function Task() {
     }
   }, [showCreateModal, showEditModal]);
 
-  useEffect(() => {
-    if (formData.assignType === 'ALL' && employees.length > 0) {
-      setFormData((prev) => ({ ...prev, assignedTo: employees.map((e) => e._id) }));
-    } else if (formData.assignType !== 'INDIVIDUAL' && formData.assignType !== 'DEPARTMENT') {
-      setFormData((prev) => ({ ...prev, assignedTo: [] }));
-    }
-  }, [formData.assignType, employees]);
-
-  useEffect(() => {
-    if (formData.assignType === 'DEPARTMENT' && formData.department && employees.length > 0) {
-      const deptEmployees = employees.filter(
-        (emp) => emp.department === formData.department || emp.departmentId === formData.department
-      );
-      setFormData((prev) => ({ ...prev, assignedTo: deptEmployees.map((e) => e._id) }));
-    }
-  }, [formData.department, formData.assignType, employees]);
-
   const filteredEmployees = employees.filter((emp) => {
     const q = empSearch.toLowerCase();
-    return (
+    const matchesSearch = 
       emp.name?.toLowerCase().includes(q) ||
       emp.employeeId?.toLowerCase().includes(q) ||
       emp.department?.toLowerCase().includes(q) ||
-      emp.role?.toLowerCase().includes(q)
-    );
+      emp.role?.toLowerCase().includes(q);
+    
+    if (selectedDepartment) {
+      return matchesSearch && (emp.department === selectedDepartment || emp.departmentId === selectedDepartment);
+    }
+    return matchesSearch;
   });
 
   const handleCreateTask = async (e) => {
@@ -1181,7 +1686,25 @@ function Task() {
         const parsedData = JSON.parse(userData);
         userId = parsedData._id || parsedData.id || parsedData.userId || parsedData.adminId || '';
       }
-      const taskData = { ...formData, createdBy: userId, createdByType: userRole };
+      
+      const taskData = { 
+        taskName: formData.taskName,
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        frequency: formData.frequency,
+        submitDate: formData.submitDate,
+        remark: formData.remark,
+        createdBy: userId, 
+        createdByType: userRole,
+        subtasks: subtasks,
+        assignType: 'DEPARTMENT',
+        department: selectedDepartment, // ✅ Department ID send kar rahe hain
+        assignedTo: formData.assignedTo
+      };
+      
+      console.log('📤 Sending task data:', taskData);
+      
       const response = await createTask(taskData, voiceNoteFile);
       if (!response.success) throw new Error(response.message || 'Failed to create task');
       setShowCreateModal(false);
@@ -1200,7 +1723,21 @@ function Task() {
     e.preventDefault();
     setLoading(true);
     try {
-      await updateTask(selectedTask._id, formData);
+      const taskData = { 
+        taskName: formData.taskName,
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        frequency: formData.frequency,
+        submitDate: formData.submitDate,
+        remark: formData.remark,
+        department: selectedDepartment, // ✅ Department ID send kar rahe hain
+        assignedTo: formData.assignedTo,
+        subtasks: subtasks,
+        assignType: 'DEPARTMENT'
+      };
+      
+      await updateTask(selectedTask._id, taskData);
       setShowEditModal(false);
       resetForm();
       setSelectedTask(null);
@@ -1239,21 +1776,25 @@ function Task() {
     const assignedToIds = Array.isArray(task.assignedTo)
       ? task.assignedTo.map((emp) => (typeof emp === 'object' ? emp._id : emp))
       : [];
+    
+    // ✅ Department ID set kar rahe hain
+    const deptId = task.department?._id || task.department || '';
+    
     setFormData({
       taskName: task.taskName || '',
       title: task.title || '',
       description: task.description || '',
-      assignType: task.assignType || 'INDIVIDUAL',
       assignedTo: assignedToIds,
-      department: task.department || '',
+      department: deptId,
       priority: task.priority || 'Medium',
-      deadlineType: task.deadlineType || 'Days',
-      deadlineValue: task.deadlineValue || 7,
-      frequency: task.frequency || 'One Time',
+      frequency: task.frequency || ['One Time'],
+      submitDate: task.submitDate || '',
       remark: task.remark || '',
       createdBy: task.createdBy || '',
       createdByType: task.createdByType || 'admin',
     });
+    setSubtasks(task.subtasks || []);
+    setSelectedDepartment(deptId);
     setShowEditModal(true);
   };
 
@@ -1267,22 +1808,22 @@ function Task() {
       taskName: '',
       title: '',
       description: '',
-      assignType: 'INDIVIDUAL',
       assignedTo: [],
       department: '',
       priority: 'Medium',
-      deadlineType: 'Days',
-      deadlineValue: 7,
-      frequency: 'One Time',
+      frequency: ['One Time'],
+      submitDate: '',
       remark: '',
       createdBy: '',
       createdByType: 'admin',
     });
     setEmpSearch('');
     setShowEmpDropdown(false);
+    setSelectedDepartment('');
     setVoiceNoteFile(null);
     setIsRecording(false);
     setAudioChunks([]);
+    setSubtasks([]);
   };
 
   const showToastMessage = (message, type = 'success') => {
@@ -1366,8 +1907,8 @@ function Task() {
   const getUpcomingTasksFilter = (tasks) => {
     const today = new Date();
     return tasks
-      .filter(task => task.dueDate && task.status !== 'Completed' && task.status !== 'Rejected')
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+      .filter(task => task.submitDate && task.status !== 'Completed' && task.status !== 'Rejected')
+      .sort((a, b) => new Date(a.submitDate) - new Date(b.submitDate));
   };
 
   const getFilteredTasks = () => {
@@ -1426,12 +1967,16 @@ function Task() {
     isRecording,
     startRecording,
     stopRecording,
+    subtasks,
+    setSubtasks,
+    selectedDepartment,
+    setSelectedDepartment,
+    allEmployees: employees,
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30">
       <div className="flex flex-col lg:flex-row">
-        {/* ─── Mobile Menu Toggle ─── */}
         <div className="lg:hidden fixed top-2 left-2 z-50">
           <button
             onClick={toggleMobileMenu}
@@ -1446,7 +1991,6 @@ function Task() {
           </button>
         </div>
 
-        {/* ─── Mobile Overlay ─── */}
         <div 
           className={`
             fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-all duration-300 lg:hidden
@@ -1455,7 +1999,6 @@ function Task() {
           onClick={() => setMobileMenuOpen(false)}
         />
 
-        {/* ─── Sidebar ─── */}
         <div 
           className={`
             fixed top-0 left-0 h-full z-40 transition-all duration-300 ease-in-out
@@ -1474,7 +2017,6 @@ function Task() {
           </button>
         </div>
 
-        {/* ─── Main Content ─── */}
         <div className="flex-1 min-h-screen w-full lg:pl-[280px] overflow-y-auto">
           <nav className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-white/30 shadow-sm">
             <div className="flex flex-wrap items-center justify-between px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-3 lg:py-4 gap-2">
@@ -1553,7 +2095,7 @@ function Task() {
 
                     <div className="space-y-2 sm:space-y-3 max-h-48 sm:max-h-60 overflow-y-auto mb-4 sm:mb-6">
                       {upcomingTasks.map((task, idx) => {
-                        const daysLeft = Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+                        const daysLeft = Math.ceil((new Date(task.submitDate) - new Date()) / (1000 * 60 * 60 * 24));
                         const pr = getPriorityStyles(task.priority);
                         const st = getStatusStyles(task.status);
                         return (
@@ -1759,15 +2301,15 @@ function Task() {
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Priority</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Progress</th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Due Date</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Submit Date</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Assigned To</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200/50">
                       {currentTasks.map((task, index) => {
-                        const isUpcoming = task.dueDate && task.status !== 'Completed' && task.status !== 'Rejected';
-                        const daysLeft = isUpcoming ? Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                        const isUpcoming = task.submitDate && task.status !== 'Completed' && task.status !== 'Rejected';
+                        const daysLeft = isUpcoming ? Math.ceil((new Date(task.submitDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
                         
                         return (
                           <tr
@@ -1815,7 +2357,7 @@ function Task() {
                             <td className="px-3 sm:px-6 py-2 sm:py-3">
                               <div className="flex items-center gap-0.5 sm:gap-1.5 text-[10px] sm:text-sm text-gray-600">
                                 <FiCalendar className="w-3 h-3 sm:w-4 sm:h-4" />
-                                {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}
+                                {task.submitDate ? new Date(task.submitDate).toLocaleDateString() : 'N/A'}
                               </div>
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-3">
@@ -1899,7 +2441,7 @@ function Task() {
 
             {showCreateModal && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
-                <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
+                <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
                   <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-4 sm:px-8 py-3 sm:py-5 border-b border-gray-100/50 flex justify-between items-center">
                     <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-1.5 sm:gap-2">
                       <FiPlus className="w-4 h-4 sm:w-6 sm:h-6" />
@@ -1930,7 +2472,7 @@ function Task() {
 
             {showEditModal && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
-                <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
+                <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
                   <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-4 sm:px-8 py-3 sm:py-5 border-b border-gray-100/50 flex justify-between items-center">
                     <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-1.5 sm:gap-2">
                       <FiEdit2 className="w-4 h-4 sm:w-6 sm:h-6" />

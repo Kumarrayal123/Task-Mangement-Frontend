@@ -22,9 +22,9 @@ import {
 import './MyTask.css';
 import axios from 'axios';
 
-const TASK_API = 'http://62.72.29.27:5001/api/tasks';
+const TASK_API = 'https://api.timelyhealth.in/api/tasks';
 const GEOCODE_API = 'https://nominatim.openstreetmap.org/search';
-const BASE_URL = 'http://62.72.29.27:5001';
+const BASE_URL = 'https://api.timelyhealth.in';
 
 const priorityMeta = {
   Critical: { color: '#ef4444', bg: 'bg-rose-50/80', text: 'text-rose-600', border: 'border-rose-200/50', icon: <FiAlertCircle className="w-4 h-4" /> },

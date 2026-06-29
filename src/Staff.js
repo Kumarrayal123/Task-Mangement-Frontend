@@ -10,7 +10,7 @@ import { FaTasks } from 'react-icons/fa';
 import Sidebar from './Sidebar';
 import './Staff.css';
 
-const BASE_URL = 'http://62.72.29.27:5001/api';
+const BASE_URL = 'https://api.timelyhealth.in/api';
 
 function Staff() {
   const navigate = useNavigate();

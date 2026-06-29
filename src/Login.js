@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { FiMail, FiLock, FiLogIn, FiUser, FiBriefcase, FiZap, FiEye, FiEyeOff, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { FiMail, FiLock, FiLogIn, FiUser, FiZap, FiEye, FiEyeOff, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 import './Login.css';
 
-const BASE_URL = 'http://62.72.29.27:5001/api';
+const BASE_URL = 'https://api.timelyhealth.in/api';
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const loginButtonRef = useRef(null);
+  
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -18,8 +21,70 @@ function Login() {
   const [userName, setUserName] = useState('');
   const [userRole, setUserRole] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // ─── Popup states ───
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupStatus, setPopupStatus] = useState('⏳ Fetching...');
+  const [employeeData, setEmployeeData] = useState(null);
 
-  // ── Voice Welcome Function ──
+  // ─── Auto-login from URL ───
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const employeeId = urlParams.get('employeeId');
+    
+    console.log('🔍 URL Params:', { employeeId });
+    
+    if (employeeId) {
+      // ─── Show popup ───
+      setShowPopup(true);
+      setPopupStatus('⏳ Fetching employee data from API...');
+      
+      // ─── API call - Get employee by employeeId (TH029) ───
+      axios.get(`${BASE_URL}/employees/get-employee?employeeId=${employeeId}`)
+        .then(response => {
+          console.log('✅ API Response:', response.data);
+          
+          if (response.data.success) {
+            const employee = response.data.data;
+            
+            console.log('👤 Employee Data:', employee);
+            console.log('📧 Email:', employee.email);
+            console.log('🔑 Password:', employee.password);
+            console.log('🆔 Employee ID:', employee.employeeId);
+            
+            // ─── Store employee data ───
+            setEmployeeData(employee);
+            
+            // ─── Auto-fill form ───
+            setFormData({
+              email: employee.email || '',
+              password: employee.password || ''
+            });
+            
+            setPopupStatus('✅ Employee found! Auto-login in progress...');
+            
+            // ─── 2 sec baad auto-click login ───
+            setTimeout(() => {
+              setPopupStatus('🚀 Logging in...');
+              if (loginButtonRef.current) {
+                loginButtonRef.current.click();
+              }
+            }, 2500);
+            
+          } else {
+            setPopupStatus('❌ Failed to fetch employee data');
+            setTimeout(() => setShowPopup(false), 3000);
+          }
+        })
+        .catch(error => {
+          console.error('❌ API Error:', error);
+          setPopupStatus('❌ API Error: ' + (error.response?.data?.message || error.message));
+          setTimeout(() => setShowPopup(false), 3000);
+        });
+    }
+  }, [location]);
+
+  // ─── Voice Welcome ───
   const speakWelcome = (name, role) => {
     if ('speechSynthesis' in window) {
       const message = `Welcome ${name}! You are logged in as ${role}. Have a great day!`;
@@ -28,27 +93,13 @@ function Login() {
       utterance.rate = 0.9;
       utterance.pitch = 1;
       utterance.volume = 1;
-      
-      const voices = window.speechSynthesis.getVoices();
-      const maleVoice = voices.find(voice => 
-        voice.name.includes('Male') || 
-        voice.name.includes('Google UK') ||
-        voice.name.includes('Daniel')
-      );
-      if (maleVoice) {
-        utterance.voice = maleVoice;
-      }
-      
       window.speechSynthesis.speak(utterance);
     }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
+    setFormData({ ...formData, [name]: value });
   };
 
   const handleSubmit = async (e) => {
@@ -59,22 +110,16 @@ function Login() {
     try {
       const employeeResponse = await axios.post(
         `${BASE_URL}/employees/login`,
-        {
-          email: formData.email,
-          password: formData.password,
-        }
+        { email: formData.email, password: formData.password }
       );
 
       const responseData = employeeResponse.data;
-      
-      // ─── Extract data from response ───
       const employee = responseData.employee || {};
       const name = employee.name || responseData.name || 'Employee';
       const role = employee.role || 'Employee';
       const employeeId = employee.employeeId || employee.id || '';
       const email = employee.email || formData.email;
       
-      // ─── Build userData object ───
       const userData = {
         _id: employee.id || employee._id || '',
         id: employee.id || employee._id || '',
@@ -83,51 +128,45 @@ function Login() {
         employeeName: name,
         firstName: name.split(' ')[0] || name,
         email: email,
-        employeeId: employeeId, // ─── This is the customized ID (TH011)
+        employeeId: employeeId,
         role: role,
         department: employee.department || '',
         joinDate: employee.joinDate || '',
         permissions: employee.permissions || [],
-        // ─── Store the actual employee object too ───
+        profileImage: employee.profileImage || employee.profile_image || employee.image || '',
         employee: employee
       };
       
-      console.log('Employee Login Response:', responseData);
-      console.log('Stored userData:', userData);
-      
       localStorage.setItem("userData", JSON.stringify(userData));
-      if (responseData.token) {
-        localStorage.setItem("token", responseData.token);
-      } else if (employee.token) {
-        localStorage.setItem("token", employee.token);
-      }
+      localStorage.setItem("employeeData", JSON.stringify(userData));
+      localStorage.setItem("employeeId", employeeId);
+      localStorage.setItem("employeeEmail", email);
+      localStorage.setItem("employeeName", name);
+      localStorage.setItem("employeeMongoId", employee._id || '');
+      
+      if (responseData.token) localStorage.setItem("token", responseData.token);
       localStorage.setItem("userRole", "employee");
 
       setUserName(name);
       setUserRole(role);
       setShowWelcome(true);
+      setShowPopup(false);
       speakWelcome(name, role);
       
       setTimeout(() => {
         navigate("/employee-dashboard", { replace: true });
       }, 2500);
 
-    } catch (employeeErr) {
-      console.log("Employee login failed, trying admin login...");
-
+    } catch (err) {
+      // ─── Admin login fallback ───
       try {
         const adminResponse = await axios.post(
           `${BASE_URL}/admin/login`,
-          {
-            email: formData.email,
-            password: formData.password,
-          }
+          { email: formData.email, password: formData.password }
         );
 
-        const responseData = adminResponse.data;
-        const admin = responseData.admin || responseData.data || {};
-        const name = admin.name || responseData.name || 'Admin';
-        const role = 'Admin';
+        const admin = adminResponse.data.admin || adminResponse.data.data || {};
+        const name = admin.name || adminResponse.data.name || 'Admin';
         
         const userData = {
           _id: admin.id || admin._id || '',
@@ -136,54 +175,40 @@ function Login() {
           fullName: name,
           adminName: name,
           email: admin.email || formData.email,
-          role: role,
-          // ─── Store admin object ───
+          role: 'Admin',
           admin: admin
         };
         
         localStorage.setItem("userData", JSON.stringify(userData));
-        if (adminResponse.data.token) {
-          localStorage.setItem("token", adminResponse.data.token);
-        }
+        localStorage.setItem("employeeData", JSON.stringify(userData));
+        localStorage.setItem("adminId", admin.id || admin._id || '');
+        localStorage.setItem("adminEmail", admin.email || formData.email);
+        localStorage.setItem("adminName", name);
         localStorage.setItem("userRole", "admin");
 
         setUserName(name);
-        setUserRole(role);
+        setUserRole('Admin');
         setShowWelcome(true);
-        speakWelcome(name, role);
+        setShowPopup(false);
+        speakWelcome(name, 'Admin');
         
         setTimeout(() => {
           navigate("/admin-dashboard", { replace: true });
         }, 2500);
 
       } catch (adminErr) {
-        console.error(adminErr);
-        setError(
-          adminErr.response?.data?.message ||
-          "Invalid email or password"
-        );
+        setError(adminErr.response?.data?.message || "Invalid email or password");
         setLoading(false);
+        setShowPopup(false);
       }
     } finally {
-      if (!showWelcome) {
-        setLoading(false);
-      }
+      if (!showWelcome) setLoading(false);
     }
   };
 
-  // ── Load voices ──
-  useEffect(() => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.getVoices();
-      window.speechSynthesis.onvoiceschanged = () => {
-        window.speechSynthesis.getVoices();
-      };
-    }
-  }, []);
-
   return (
     <div className="login-container">
-      {/* Animated Background */}
+      {/* ─── Background ─── */}
       <div className="bg-animation">
         <div className="circle circle-1"></div>
         <div className="circle circle-2"></div>
@@ -192,7 +217,66 @@ function Login() {
         <div className="circle circle-5"></div>
       </div>
 
-      {/* Welcome Popup - Attractive Glass Version */}
+      {/* ─── POPUP - Show Employee Data ─── */}
+      {showPopup && (
+        <div className="popup-overlay">
+          <div className="popup-card">
+            <div className="popup-icon">
+              {popupStatus.includes('⏳') && <FiZap className="w-12 h-12 text-indigo-400 animate-pulse" />}
+              {popupStatus.includes('✅') && <FiCheckCircle className="w-12 h-12 text-emerald-400" />}
+              {popupStatus.includes('🚀') && <FiLogIn className="w-12 h-12 text-blue-400 animate-pulse" />}
+              {popupStatus.includes('❌') && <FiAlertCircle className="w-12 h-12 text-rose-400" />}
+            </div>
+            
+            <h3 className="popup-title">
+              {popupStatus.includes('⏳') && '🔍 Fetching Employee Data'}
+              {popupStatus.includes('✅') && '✅ Employee Found!'}
+              {popupStatus.includes('🚀') && '🚀 Logging in...'}
+              {popupStatus.includes('❌') && '❌ Error'}
+            </h3>
+            
+            <p className="popup-status">{popupStatus}</p>
+            
+            {/* ─── Show Employee Data ─── */}
+            {employeeData && (
+              <div className="popup-details">
+                <div className="popup-detail-row">
+                  <span className="popup-detail-label">🆔 Employee ID:</span>
+                  <span className="popup-detail-value">{employeeData.employeeId}</span>
+                </div>
+                <div className="popup-detail-row">
+                  <span className="popup-detail-label">👤 Name:</span>
+                  <span className="popup-detail-value">{employeeData.name}</span>
+                </div>
+                <div className="popup-detail-row">
+                  <span className="popup-detail-label">📧 Email:</span>
+                  <span className="popup-detail-value">{employeeData.email}</span>
+                </div>
+                <div className="popup-detail-row">
+                  <span className="popup-detail-label">🔑 Password:</span>
+                  <span className="popup-detail-value">{'•'.repeat(employeeData.password?.length || 8)}</span>
+                </div>
+                <div className="popup-detail-row">
+                  <span className="popup-detail-label">🏢 Department:</span>
+                  <span className="popup-detail-value">{employeeData.department || 'N/A'}</span>
+                </div>
+                <div className="popup-detail-row">
+                  <span className="popup-detail-label">💼 Role:</span>
+                  <span className="popup-detail-value">{employeeData.role || 'N/A'}</span>
+                </div>
+              </div>
+            )}
+            
+            <div className="popup-progress">
+              <div className="popup-progress-bar">
+                <div className={`popup-progress-fill ${popupStatus.includes('❌') ? 'error' : ''}`}></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── WELCOME POPUP ─── */}
       {showWelcome && (
         <div className="welcome-overlay">
           <div className="welcome-popup-glass">
@@ -214,19 +298,11 @@ function Login() {
               </div>
               <p className="welcome-loading-text">Redirecting to dashboard...</p>
             </div>
-            <div className="welcome-particles">
-              <span className="particle p1">✦</span>
-              <span className="particle p2">✦</span>
-              <span className="particle p3">✦</span>
-              <span className="particle p4">✦</span>
-              <span className="particle p5">✦</span>
-              <span className="particle p6">✦</span>
-            </div>
           </div>
         </div>
       )}
 
-      {/* Login Card */}
+      {/* ─── LOGIN CARD ─── */}
       <div className="login-card glass">
         <div className="login-header">
           <div className="logo-icon">
@@ -279,11 +355,7 @@ function Login() {
               className="password-toggle"
               onClick={() => setShowPassword(!showPassword)}
             >
-              {showPassword ? (
-                <FiEyeOff className="w-4 h-4" />
-              ) : (
-                <FiEye className="w-4 h-4" />
-              )}
+              {showPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
             </button>
           </div>
 
@@ -295,7 +367,12 @@ function Login() {
             <a href="#" className="forgot-link">Forgot Password?</a>
           </div>
 
-          <button type="submit" className="login-button" disabled={loading}>
+          <button 
+            ref={loginButtonRef}
+            type="submit" 
+            className="login-button" 
+            disabled={loading}
+          >
             {loading ? (
               <span className="loading-spinner">
                 <span className="spinner"></span>
@@ -327,7 +404,6 @@ function Login() {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
-        /* ── Animated Background ── */
         .bg-animation {
           position: absolute;
           inset: 0;
@@ -394,7 +470,6 @@ function Login() {
           75% { transform: translate(40px, 10px) scale(1.02); }
         }
 
-        /* ── Glass Card ── */
         .login-card {
           position: relative;
           z-index: 1;
@@ -406,24 +481,15 @@ function Login() {
           -webkit-backdrop-filter: blur(20px);
           border-radius: 30px;
           border: 1px solid rgba(255, 255, 255, 0.15);
-          box-shadow: 
-            0 25px 50px rgba(0, 0, 0, 0.4),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+          box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
           animation: slideIn 0.6s ease-out;
         }
 
         @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateY(30px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
+          from { opacity: 0; transform: translateY(30px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
-        /* ── Header ── */
         .login-header {
           text-align: center;
           margin-bottom: 35px;
@@ -465,7 +531,6 @@ function Login() {
           -webkit-text-fill-color: rgba(255, 255, 255, 0.6);
         }
 
-        /* ── Form ── */
         .login-form {
           display: flex;
           flex-direction: column;
@@ -524,7 +589,6 @@ function Login() {
           color: rgba(255, 255, 255, 0.7);
         }
 
-        /* ── Options ── */
         .form-options {
           display: flex;
           justify-content: space-between;
@@ -558,7 +622,6 @@ function Login() {
           color: #818cf8;
         }
 
-        /* ── Button ── */
         .login-button {
           width: 100%;
           padding: 14px;
@@ -620,7 +683,6 @@ function Login() {
           to { transform: rotate(360deg); }
         }
 
-        /* ── Footer ── */
         .login-footer {
           text-align: center;
           font-size: 13px;
@@ -633,7 +695,6 @@ function Login() {
           font-weight: 500;
         }
 
-        /* ── Error ── */
         .error-message {
           display: flex;
           align-items: center;
@@ -646,13 +707,110 @@ function Login() {
           color: #fca5a5;
         }
 
-        /* ── Welcome Popup ── ATTRACTIVE GLASS VERSION ── */
+        /* ─── POPUP STYLES ─── */
+        .popup-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9998;
+          animation: fadeIn 0.4s ease-out;
+        }
+
+        .popup-card {
+          background: rgba(255, 255, 255, 0.06);
+          backdrop-filter: blur(30px);
+          -webkit-backdrop-filter: blur(30px);
+          padding: 30px 35px 25px;
+          border-radius: 24px;
+          text-align: center;
+          max-width: 420px;
+          width: 90%;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+          animation: welcomeSlideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .popup-icon {
+          width: 60px;
+          height: 60px;
+          margin: 0 auto 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .popup-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 4px;
+        }
+
+        .popup-status {
+          color: rgba(255, 255, 255, 0.6);
+          font-size: 12px;
+          margin-bottom: 14px;
+        }
+
+        .popup-details {
+          background: rgba(255, 255, 255, 0.04);
+          padding: 10px 14px;
+          border-radius: 10px;
+          margin-bottom: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          text-align: left;
+        }
+
+        .popup-detail-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11px;
+          padding: 3px 0;
+          color: rgba(255, 255, 255, 0.5);
+        }
+
+        .popup-detail-row .popup-detail-value {
+          color: rgba(255, 255, 255, 0.9);
+          font-weight: 500;
+        }
+
+        .popup-progress {
+          width: 100%;
+        }
+
+        .popup-progress-bar {
+          width: 100%;
+          height: 3px;
+          background: rgba(255, 255, 255, 0.06);
+          border-radius: 10px;
+          overflow: hidden;
+        }
+
+        .popup-progress-fill {
+          height: 100%;
+          width: 0%;
+          background: linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa);
+          border-radius: 10px;
+          animation: progressFill 2.5s ease-in-out forwards;
+        }
+
+        .popup-progress-fill.error {
+          background: linear-gradient(90deg, #ef4444, #dc2626);
+          animation-duration: 0.5s;
+        }
+
+        /* ─── WELCOME STYLES ─── */
         .welcome-overlay {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.4);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -662,36 +820,23 @@ function Login() {
 
         .welcome-popup-glass {
           position: relative;
-          background: rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.06);
           backdrop-filter: blur(30px);
           -webkit-backdrop-filter: blur(30px);
-          padding: 50px 55px 45px;
+          padding: 40px 45px 35px;
           border-radius: 32px;
           text-align: center;
           max-width: 440px;
           width: 90%;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          box-shadow: 
-            0 30px 80px rgba(0, 0, 0, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
           animation: welcomeSlideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-          overflow: hidden;
-        }
-
-        .welcome-popup-glass::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.1), transparent 60%);
-          pointer-events: none;
         }
 
         .welcome-success-icon {
-          position: relative;
-          z-index: 1;
-          width: 80px;
-          height: 80px;
-          margin: 0 auto 16px;
+          width: 72px;
+          height: 72px;
+          margin: 0 auto 12px;
           background: linear-gradient(135deg, rgba(52, 211, 153, 0.15), rgba(16, 185, 129, 0.05));
           border-radius: 50%;
           display: flex;
@@ -702,36 +847,28 @@ function Login() {
         }
 
         @keyframes successPulse {
-          0%, 100% { 
-            box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.2);
-            transform: scale(1);
-          }
-          50% { 
-            box-shadow: 0 0 40px 10px rgba(52, 211, 153, 0.1);
-            transform: scale(1.02);
-          }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.2); transform: scale(1); }
+          50% { box-shadow: 0 0 40px 10px rgba(52, 211, 153, 0.1); transform: scale(1.02); }
         }
 
         .welcome-sparkle {
           position: absolute;
-          top: 20px;
-          right: 30px;
-          font-size: 24px;
+          top: 16px;
+          right: 24px;
+          font-size: 20px;
           animation: sparkleFloat 3s ease-in-out infinite;
         }
 
         @keyframes sparkleFloat {
           0%, 100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-8px) rotate(20deg); }
+          50% { transform: translateY(-6px) rotate(20deg); }
         }
 
         .welcome-title {
-          position: relative;
-          z-index: 1;
-          font-size: 28px;
+          font-size: 24px;
           font-weight: 700;
           color: #ffffff;
-          margin-bottom: 10px;
+          margin-bottom: 8px;
           background: linear-gradient(135deg, #e0e7ff, #c4b5fd);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -739,45 +876,38 @@ function Login() {
         }
 
         .welcome-role-badge {
-          position: relative;
-          z-index: 1;
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 4px 16px;
-          background: rgba(99, 102, 241, 0.15);
-          border: 1px solid rgba(99, 102, 241, 0.2);
+          padding: 4px 14px;
+          background: rgba(99, 102, 241, 0.12);
+          border: 1px solid rgba(99, 102, 241, 0.15);
           border-radius: 20px;
           color: #a5b4fc;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 500;
-          margin-bottom: 16px;
+          margin-bottom: 12px;
         }
 
         .welcome-message {
-          position: relative;
-          z-index: 1;
           color: rgba(255, 255, 255, 0.7);
-          font-size: 15px;
+          font-size: 14px;
           line-height: 1.6;
-          margin-bottom: 24px;
+          margin-bottom: 16px;
         }
 
         .welcome-message strong {
           color: rgba(255, 255, 255, 0.9);
-          font-weight: 600;
         }
 
         .welcome-progress {
-          position: relative;
-          z-index: 1;
           width: 100%;
         }
 
         .welcome-progress-bar {
           width: 100%;
-          height: 4px;
-          background: rgba(255, 255, 255, 0.08);
+          height: 3px;
+          background: rgba(255, 255, 255, 0.06);
           border-radius: 10px;
           overflow: hidden;
         }
@@ -798,9 +928,9 @@ function Login() {
         }
 
         .welcome-loading-text {
-          color: rgba(255, 255, 255, 0.4);
-          font-size: 12px;
-          margin-top: 10px;
+          color: rgba(255, 255, 255, 0.35);
+          font-size: 11px;
+          margin-top: 8px;
           animation: textPulse 1.5s ease-in-out infinite;
         }
 
@@ -809,79 +939,24 @@ function Login() {
           50% { opacity: 0.8; }
         }
 
-        /* ── Floating Particles ── */
-        .welcome-particles {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          overflow: hidden;
-        }
-
-        .particle {
-          position: absolute;
-          color: rgba(255, 255, 255, 0.08);
-          font-size: 20px;
-          animation: particleFloat 8s ease-in-out infinite;
-        }
-
-        .p1 { top: 10%; left: 5%; animation-delay: 0s; }
-        .p2 { top: 20%; right: 8%; animation-delay: -1s; }
-        .p3 { bottom: 30%; left: 10%; animation-delay: -2s; }
-        .p4 { bottom: 20%; right: 5%; animation-delay: -3s; }
-        .p5 { top: 50%; left: 3%; animation-delay: -4s; }
-        .p6 { top: 40%; right: 3%; animation-delay: -5s; }
-
-        @keyframes particleFloat {
-          0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.3; }
-          50% { transform: translateY(-30px) rotate(180deg); opacity: 0.8; }
-        }
-
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
         }
 
         @keyframes welcomeSlideUp {
-          from { 
-            opacity: 0; 
-            transform: translateY(40px) scale(0.9); 
-          }
-          to { 
-            opacity: 1; 
-            transform: translateY(0) scale(1); 
-          }
+          from { opacity: 0; transform: translateY(40px) scale(0.9); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
-        /* ── Responsive ── */
         @media (max-width: 480px) {
-          .login-card {
-            padding: 30px 24px;
-            margin: 20px;
-            border-radius: 24px;
-          }
-
-          .login-header h1 {
-            font-size: 22px;
-          }
-
-          .welcome-popup-glass {
-            padding: 35px 25px 30px;
-            margin: 20px;
-          }
-
-          .welcome-title {
-            font-size: 24px;
-          }
-
-          .welcome-success-icon {
-            width: 64px;
-            height: 64px;
-          }
-
-          .welcome-success-icon svg {
-            width: 32px;
-            height: 32px;
-          }
+          .login-card { padding: 30px 24px; margin: 20px; border-radius: 24px; }
+          .login-header h1 { font-size: 22px; }
+          .popup-card { padding: 25px 20px; margin: 20px; }
+          .popup-title { font-size: 16px; }
+          .popup-detail-row { font-size: 10px; }
+          .welcome-popup-glass { padding: 30px 20px 25px; margin: 20px; }
+          .welcome-title { font-size: 20px; }
         }
       `}</style>
     </div>

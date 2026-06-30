@@ -53,13 +53,16 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiRepeat,
-  FiCalendar as FiCalendarIcon
+  FiCalendar as FiCalendarIcon,
+  FiUserCheck,
+  FiUserX
 } from 'react-icons/fi';
 import { 
   FaTasks, 
   FaRocket,
   FaCheck,
-  FaList
+  FaList,
+  FaWhatsapp
 } from 'react-icons/fa';
 import Sidebar from '../Sidebar';
 import '../Sidebar.css';
@@ -943,6 +946,35 @@ const ViewTaskModal = ({
   const reportedIssues = selectedTask.reportedIssues || [];
   const subtasks = selectedTask.subtasks || [];
 
+  // Get created by user details with proper null checks
+  const getCreatedByDetails = () => {
+    const createdBy = selectedTask.createdBy;
+    if (!createdBy) return null;
+    if (typeof createdBy === 'object' && createdBy !== null) {
+      return createdBy;
+    }
+    if (typeof createdBy === 'string') {
+      return getEmployeeDetails(createdBy) || { _id: createdBy, name: 'Unknown', email: 'N/A' };
+    }
+    return null;
+  };
+
+  const createdByUser = getCreatedByDetails();
+
+  // WhatsApp click handler
+  const handleWhatsAppClick = (phoneNumber) => {
+    if (!phoneNumber) return;
+    // Remove any non-numeric characters
+    const cleanNumber = phoneNumber.replace(/\D/g, '');
+    // Add country code if not present (assuming India +91)
+    let number = cleanNumber;
+    if (!number.startsWith('91') && number.length === 10) {
+      number = '91' + number;
+    }
+    const whatsappUrl = `https://wa.me/${number}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   const getFileIcon = (fileName) => {
     if (!fileName) return <FiFile className="w-3.5 h-3.5 sm:w-4 sm:h-4" />;
     const ext = fileName.split('.').pop()?.toLowerCase();
@@ -1018,6 +1050,62 @@ const ViewTaskModal = ({
         </div>
 
         <div className="px-4 sm:px-8 py-4 sm:py-6">
+          {/* Created By Info Section with WhatsApp */}
+          <div className="bg-gradient-to-r from-indigo-50/80 to-purple-50/80 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-indigo-200/50 mb-4 sm:mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg ${
+                  selectedTask.createdByType === 'admin' 
+                    ? 'bg-gradient-to-r from-indigo-500 to-purple-500 shadow-indigo-500/30' 
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/30'
+                }`}>
+                  {createdByUser && createdByUser.name ? createdByUser.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-semibold text-gray-800">
+                    {createdByUser && createdByUser.name ? createdByUser.name : 'Unknown User'}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs">
+                    <span className="text-gray-500">
+                      {createdByUser && createdByUser.email ? createdByUser.email : 'N/A'}
+                    </span>
+                    {/* WhatsApp Button with Phone Number */}
+                    {createdByUser && createdByUser.phone && (
+                      <button
+                        onClick={() => handleWhatsAppClick(createdByUser.phone)}
+                        className="inline-flex items-center gap-0.5 px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors text-[8px] sm:text-[10px] font-medium"
+                        title="Chat on WhatsApp"
+                      >
+                        <FaWhatsapp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                        {createdByUser.phone}
+                      </button>
+                    )}
+                    <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[10px] font-medium ${
+                      selectedTask.createdByType === 'admin' 
+                        ? 'bg-indigo-100 text-indigo-700' 
+                        : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      {selectedTask.createdByType === 'admin' ? (
+                        <><FiUserCheck className="inline mr-0.5 w-2.5 h-2.5" /> Admin</>
+                      ) : (
+                        <><FiUser className="inline mr-0.5 w-2.5 h-2.5" /> Employee</>
+                      )}
+                    </span>
+                    <span className="text-gray-400 text-[8px] sm:text-[10px]">
+                      Created: {formatDateTime(selectedTask.createdAt)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {selectedTask.department && (
+                <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-white/60 backdrop-blur-sm rounded-full text-[10px] sm:text-xs text-gray-600 border border-gray-200/50 flex items-center gap-0.5 sm:gap-1">
+                  <FiBriefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  {typeof selectedTask.department === 'object' ? selectedTask.department.name : selectedTask.department}
+                </span>
+              )}
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row justify-between items-start gap-2 sm:gap-0 mb-4 sm:mb-6">
             <div className="w-full sm:w-auto">
               <h3 className="text-base sm:text-xl font-bold text-gray-800">{selectedTask.taskName}</h3>
@@ -1456,6 +1544,7 @@ function Task() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterDue, setFilterDue] = useState('all');
+  const [filterCreatedBy, setFilterCreatedBy] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1597,7 +1686,9 @@ function Task() {
         inProgress: statsData?.inProgress || 0,
         completed: statsData?.completed || 0,
         overdue: statsData?.overdue || 0,
-        rejected: statsData?.rejected || 0
+        rejected: statsData?.rejected || 0,
+        employeeCreated: tasksData.filter(t => t.createdByType === 'employee').length,
+        adminCreated: tasksData.filter(t => t.createdByType === 'admin' || !t.createdByType).length
       });
 
       const upcoming = getUpcomingTasksList(tasksData);
@@ -1699,7 +1790,7 @@ function Task() {
         createdByType: userRole,
         subtasks: subtasks,
         assignType: 'DEPARTMENT',
-        department: selectedDepartment, // ✅ Department ID send kar rahe hain
+        department: selectedDepartment,
         assignedTo: formData.assignedTo
       };
       
@@ -1731,7 +1822,7 @@ function Task() {
         frequency: formData.frequency,
         submitDate: formData.submitDate,
         remark: formData.remark,
-        department: selectedDepartment, // ✅ Department ID send kar rahe hain
+        department: selectedDepartment,
         assignedTo: formData.assignedTo,
         subtasks: subtasks,
         assignType: 'DEPARTMENT'
@@ -1777,7 +1868,6 @@ function Task() {
       ? task.assignedTo.map((emp) => (typeof emp === 'object' ? emp._id : emp))
       : [];
     
-    // ✅ Department ID set kar rahe hain
     const deptId = task.department?._id || task.department || '';
     
     setFormData({
@@ -1932,6 +2022,12 @@ function Task() {
     
     if (filterDue === 'upcoming') {
       filtered = getUpcomingTasksFilter(filtered);
+    }
+
+    if (filterCreatedBy === 'employee') {
+      filtered = filtered.filter((task) => task.createdByType === 'employee');
+    } else if (filterCreatedBy === 'admin') {
+      filtered = filtered.filter((task) => task.createdByType === 'admin' || !task.createdByType);
     }
     
     return filtered;
@@ -2174,7 +2270,7 @@ function Task() {
             </div>
 
             {stats && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6 lg:mb-8">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6 lg:mb-8">
                 {[
                   { label: 'Total', value: stats.total || 0, icon: <FiBarChart2 className="text-white w-4 h-4 sm:w-5 sm:h-5" />, gradient: 'from-indigo-400 to-indigo-500' },
                   { label: 'Pending', value: stats.pending || 0, icon: <FiClock className="text-white w-4 h-4 sm:w-5 sm:h-5" />, gradient: 'from-amber-400 to-amber-500' },
@@ -2232,6 +2328,19 @@ function Task() {
                 <option value="Medium">Medium</option>
                 <option value="Low">Low</option>
               </select>
+              <select
+                value={filterCreatedBy}
+                onChange={(e) => setFilterCreatedBy(e.target.value)}
+                className="px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm min-w-[120px] sm:min-w-[150px]"
+              >
+                <option value="all">All Tasks</option>
+                <option value="admin">
+                  <FiUserCheck className="inline mr-1" /> Admin Created
+                </option>
+                <option value="employee">
+                  <FiUser className="inline mr-1" /> Employee Created
+                </option>
+              </select>
               <button
                 onClick={() => setFilterDue(filterDue === 'upcoming' ? 'all' : 'upcoming')}
                 className={`px-2 sm:px-4 py-1.5 sm:py-2.5 rounded-full text-[10px] sm:text-sm font-medium transition-all flex items-center gap-1.5 sm:gap-2 ${
@@ -2252,6 +2361,7 @@ function Task() {
                   setFilterStatus('all');
                   setFilterPriority('all');
                   setFilterDue('all');
+                  setFilterCreatedBy('all');
                 }}
                 className="px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-full text-[10px] sm:text-sm font-medium text-gray-600 hover:bg-white/60 transition-all flex items-center gap-1.5 sm:gap-2"
               >
@@ -2274,6 +2384,20 @@ function Task() {
               </div>
             )}
 
+            {filterCreatedBy === 'employee' && (
+              <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 backdrop-blur-sm border border-emerald-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-emerald-700 text-xs sm:text-sm">
+                <FiUser className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="font-medium">Showing {filteredTasks.length} tasks created by employees</span>
+              </div>
+            )}
+
+            {filterCreatedBy === 'admin' && (
+              <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 backdrop-blur-sm border border-indigo-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-indigo-700 text-xs sm:text-sm">
+                <FiUserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="font-medium">Showing {filteredTasks.length} tasks created by admin</span>
+              </div>
+            )}
+
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16 sm:py-20 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/30">
                 <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></div>
@@ -2288,6 +2412,10 @@ function Task() {
                 <p className="text-xs sm:text-sm text-gray-400 mt-1">
                   {filterDue === 'upcoming' 
                     ? 'No upcoming tasks! All tasks are completed or not due yet 🎉'
+                    : filterCreatedBy === 'employee'
+                    ? 'No tasks created by employees yet!'
+                    : filterCreatedBy === 'admin'
+                    ? 'No tasks created by admin yet!'
                     : 'Create your first task to get started!'}
                 </p>
               </div>
@@ -2302,6 +2430,7 @@ function Task() {
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Progress</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Submit Date</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Created By</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Assigned To</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                       </tr>
@@ -2310,6 +2439,18 @@ function Task() {
                       {currentTasks.map((task, index) => {
                         const isUpcoming = task.submitDate && task.status !== 'Completed' && task.status !== 'Rejected';
                         const daysLeft = isUpcoming ? Math.ceil((new Date(task.submitDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                        
+                        // Get created by user info with proper null checks
+                        const createdByUser = task.createdBy;
+                        const isEmployeeCreated = task.createdByType === 'employee';
+                        
+                        // Get creator name with proper null checks
+                        let creatorName = 'Admin';
+                        let creatorInitial = 'A';
+                        if (createdByUser && typeof createdByUser === 'object') {
+                          creatorName = createdByUser.name || 'Unknown';
+                          creatorInitial = creatorName.charAt(0).toUpperCase();
+                        }
                         
                         return (
                           <tr
@@ -2358,6 +2499,27 @@ function Task() {
                               <div className="flex items-center gap-0.5 sm:gap-1.5 text-[10px] sm:text-sm text-gray-600">
                                 <FiCalendar className="w-3 h-3 sm:w-4 sm:h-4" />
                                 {task.submitDate ? new Date(task.submitDate).toLocaleDateString() : 'N/A'}
+                              </div>
+                            </td>
+                            <td className="px-3 sm:px-6 py-2 sm:py-3">
+                              <div className="flex items-center gap-1">
+                                <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-white font-bold text-[8px] sm:text-xs ${
+                                  isEmployeeCreated 
+                                    ? 'bg-gradient-to-r from-emerald-400 to-teal-500' 
+                                    : 'bg-gradient-to-r from-indigo-400 to-purple-500'
+                                }`}>
+                                  {creatorInitial}
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[8px] sm:text-xs text-gray-700 truncate max-w-[50px] sm:max-w-[80px]">
+                                    {creatorName}
+                                  </span>
+                                  <span className={`text-[6px] sm:text-[8px] font-medium ${
+                                    isEmployeeCreated ? 'text-emerald-600' : 'text-indigo-600'
+                                  }`}>
+                                    {isEmployeeCreated ? '👤 Employee' : '👑 Admin'}
+                                  </span>
+                                </div>
                               </div>
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-3">

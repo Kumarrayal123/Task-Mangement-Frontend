@@ -30,10 +30,13 @@ import {
   FiBell,
   FiClock as FiClockIcon,
   FiPlus,
-  FiSmile
+  FiSmile,
+  FiSun,
+  FiMoon,
+  FiCloud
 } from 'react-icons/fi';
-import { FaTasks, FaRocket } from 'react-icons/fa';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
+import { FaTasks, FaRocket, FaChartLine, FaChartPie, FaUsers } from 'react-icons/fa';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, AreaChart, Area, ComposedChart } from 'recharts';
 import EmployeeSidebar from './components/EmployeeSidebar';
 
 const TASK_API = 'https://api.timelyhealth.in/api/tasks';
@@ -43,7 +46,7 @@ const NOTIFICATIONS_API = 'https://api.timelyhealth.in/api/tasks/employeenotific
 const priorityMeta = {
   Critical: { color: '#ef4444', bg: 'bg-rose-50/80', text: 'text-rose-600', border: 'border-rose-200/50', icon: <FiAlertCircle className="w-4 h-4" /> },
   High:     { color: '#f97316', bg: 'bg-orange-50/80', text: 'text-orange-600', border: 'border-orange-200/50', icon: <FiFlag className="w-4 h-4" /> },
-  Medium:   { color: '#eab308', bg: 'bg-amber-50/80', text: 'text-amber-600', border: 'border-amber-200/50', icon: <FiStar className="w-4 h-4" /> },
+  Medium:   { color: '#8b5cf6', bg: 'bg-purple-50/80', text: 'text-purple-600', border: 'border-purple-200/50', icon: <FiStar className="w-4 h-4" /> },
   Low:      { color: '#22c55e', bg: 'bg-emerald-50/80', text: 'text-emerald-600', border: 'border-emerald-200/50', icon: <FiCheckCircle className="w-4 h-4" /> },
 };
 
@@ -55,6 +58,25 @@ const statusMeta = {
   'Overdue':     { color: '#f97316', bg: 'bg-orange-50/80', text: 'text-orange-600', border: 'border-orange-200/50', icon: <FiAlertCircle className="w-4 h-4" /> },
 };
 
+// Chart color palette - no yellow
+const CHART_COLORS = {
+  primary: '#6366f1',
+  secondary: '#8b5cf6',
+  success: '#10b981',
+  danger: '#ef4444',
+  warning: '#f97316',
+  info: '#3b82f6',
+  purple: '#8b5cf6',
+  pink: '#ec4899',
+  teal: '#14b8a6',
+  cyan: '#06b6d4',
+  indigo: '#6366f1',
+  emerald: '#10b981',
+  rose: '#ef4444',
+  orange: '#f97316',
+  blue: '#3b82f6'
+};
+
 function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -64,46 +86,50 @@ function getInitials(name = '') {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-// ── Stat Card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, icon, gradient }) {
+// ── Stat Card - FIXED ICON RENDERING ────────────────────────────────────────
+function StatCard({ label, value, icon: IconComponent, gradient }) {
   return (
-    <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-2.5 sm:p-4 lg:p-5 border border-white/30 
-      shadow-lg hover:shadow-xl transition-all hover:scale-105 cursor-pointer group">
-      <div className="flex items-center gap-1.5 sm:gap-3">
-        <div className={`w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-xl flex items-center justify-center shadow-lg ${gradient}`}>
-          <span className="text-white text-sm sm:text-base lg:text-lg">{icon}</span>
+    <div className="relative bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-2.5 sm:p-4 lg:p-5 border border-white/30 
+      shadow-lg hover:shadow-2xl transition-all hover:scale-105 hover:-translate-y-1 cursor-pointer group overflow-hidden">
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
+      <div className={`absolute -top-10 -right-10 w-20 h-20 bg-gradient-to-br ${gradient} rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-500 blur-2xl`}></div>
+      
+      <div className="relative z-10 flex items-center gap-1.5 sm:gap-3">
+        <div className={`w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-r ${gradient} group-hover:scale-110 group-hover:rotate-6 transition-all`}>
+          {IconComponent}
         </div>
         <div className="min-w-0">
           <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-800">{value}</p>
           <p className="text-[8px] sm:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{label}</p>
         </div>
       </div>
+      
+      <div className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r ${gradient} w-0 group-hover:w-full transition-all duration-500`}></div>
     </div>
   );
 }
 
 // ── Quick Action Card ──────────────────────────────────────────────────────
-function QuickActionCard({ icon, label, color, onClick }) {
+function QuickActionCard({ icon: IconComponent, label, color, onClick, description }) {
   return (
     <div 
       onClick={onClick}
       className={`bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-5 border border-white/30 
-        shadow-lg hover:shadow-xl transition-all hover:scale-105 cursor-pointer group
-        hover:border-${color}-300/50`}
+        shadow-lg hover:shadow-2xl transition-all hover:scale-105 hover:-translate-y-1 cursor-pointer group`}
     >
       <div className="flex items-center gap-2 sm:gap-3">
-        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-r ${color}`}>
-          <span className="text-white text-sm sm:text-base lg:text-lg">{icon}</span>
+        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-r ${color} group-hover:scale-110 transition-all`}>
+          {IconComponent}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-xs sm:text-sm lg:text-base font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors">
             {label}
           </p>
           <p className="text-[6px] sm:text-[8px] lg:text-[10px] text-gray-400 truncate">
-            Click to {label.toLowerCase()}
+            {description || `Click to ${label.toLowerCase()}`}
           </p>
         </div>
-        <FiChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all ml-auto" />
+        <FiChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all ml-auto flex-shrink-0" />
       </div>
     </div>
   );
@@ -119,6 +145,7 @@ function EmployeeDashboard() {
   const [showDuePopup, setShowDuePopup] = useState(false);
   const [dueTask, setDueTask] = useState(null);
   const [showWelcomePopup, setShowWelcomePopup] = useState(true);
+  const [currentDateTime, setCurrentDateTime] = useState('');
   const [dashboardData, setDashboardData] = useState({
     totalAssignedTasks: 0,
     pendingTasks: 0,
@@ -137,6 +164,29 @@ function EmployeeDashboard() {
   });
   const [notificationCount, setNotificationCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // ─── Update current date and time ───
+  useEffect(() => {
+    const updateDateTime = () => {
+      const now = new Date();
+      const options = {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      };
+      setCurrentDateTime(now.toLocaleDateString('en-US', options));
+    };
+    
+    updateDateTime();
+    const interval = setInterval(updateDateTime, 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // ── Voice Function for Welcome (Female Voice) ──
   const speakWelcome = (name) => {
@@ -348,6 +398,11 @@ function EmployeeDashboard() {
     navigate('/my-task');
   };
 
+  const navigateToTodayTasks = () => {
+    if (showWelcomePopup) dismissWelcomePopup();
+    navigate('/my-today-tasks');
+  };
+
   const navigateToCreateTask = () => {
     if (showWelcomePopup) dismissWelcomePopup();
     navigate('/create-task');
@@ -381,32 +436,32 @@ function EmployeeDashboard() {
 
   const mainContentPadding = sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-[280px]';
 
-  // ── Prepare chart data ──
+  // ── Prepare chart data with improved colors ──
   const pieData = Object.entries(priorityBreakdown).map(([name, value]) => ({
     name,
     value,
-    color: priorityMeta[name]?.color || '#94a3b8'
+    color: priorityMeta[name]?.color || CHART_COLORS.purple
   })).filter(item => item.value > 0);
 
   const barData = [
-    { name: 'Critical', tasks: priorityBreakdown.Critical || 0, color: '#ef4444' },
-    { name: 'High', tasks: priorityBreakdown.High || 0, color: '#f97316' },
-    { name: 'Medium', tasks: priorityBreakdown.Medium || 0, color: '#eab308' },
-    { name: 'Low', tasks: priorityBreakdown.Low || 0, color: '#22c55e' }
+    { name: 'Critical', tasks: priorityBreakdown.Critical || 0, color: CHART_COLORS.danger },
+    { name: 'High', tasks: priorityBreakdown.High || 0, color: CHART_COLORS.warning },
+    { name: 'Medium', tasks: priorityBreakdown.Medium || 0, color: CHART_COLORS.purple },
+    { name: 'Low', tasks: priorityBreakdown.Low || 0, color: CHART_COLORS.success }
   ];
 
   const performanceData = [
-    { name: 'Tasks Done', value: completedTasks, color: '#6366f1', icon: '📊' },
-    { name: 'Active Tasks', value: activeTasks, color: '#f59e0b', icon: '⚡' },
-    { name: 'Completion Rate', value: completionRate, color: '#10b981', icon: '📈' },
-    { name: 'Created Tasks', value: myCreatedTasks, color: '#8b5cf6', icon: '📝' },
-    { name: 'Reported Issues', value: myReportedIssues, color: '#ef4444', icon: '🐛' },
-    { name: 'Expenses (₹)', value: myExpenses, color: '#22c55e', icon: '💰' }
+    { name: 'Tasks Done', value: completedTasks, color: CHART_COLORS.indigo, icon: '📊' },
+    { name: 'Active Tasks', value: activeTasks, color: CHART_COLORS.warning, icon: '⚡' },
+    { name: 'Completion Rate', value: completionRate, color: CHART_COLORS.success, icon: '📈' },
+    { name: 'Created Tasks', value: myCreatedTasks, color: CHART_COLORS.purple, icon: '📝' },
+    { name: 'Reported Issues', value: myReportedIssues, color: CHART_COLORS.danger, icon: '🐛' },
+    { name: 'Expenses (₹)', value: myExpenses, color: CHART_COLORS.teal, icon: '💰' }
   ];
 
   const extraStatsData = [
-    { name: 'Reported Issues', value: myReportedIssues, color: '#ef4444' },
-    { name: 'Total Expenses', value: myExpenses / 100, color: '#22c55e' }
+    { name: 'Reported Issues', value: myReportedIssues, color: CHART_COLORS.danger },
+    { name: 'Total Expenses', value: myExpenses / 100, color: CHART_COLORS.teal }
   ];
 
   const CustomTooltip = ({ active, payload }) => {
@@ -442,7 +497,7 @@ function EmployeeDashboard() {
       />
 
       <div className={`flex-1 ${mainContentPadding} flex flex-col min-h-screen transition-all duration-300 ease-in-out`}>
-        {/* ── Welcome Popup with BOTTOM MARGIN FIX ── */}
+        {/* ── Welcome Popup ── */}
         {showWelcomePopup && (
           <div 
             className="fixed inset-0 z-[2000] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fadeIn"
@@ -514,7 +569,7 @@ function EmployeeDashboard() {
           </div>
         )}
 
-        {/* ── Due Date Popup with BOTTOM MARGIN FIX ── */}
+        {/* ── Due Date Popup ── */}
         {showDuePopup && dueTask && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
             <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl animate-slideDown relative mb-4 sm:mb-8">
@@ -623,7 +678,7 @@ function EmployeeDashboard() {
           </div>
         )}
 
-        {/* ── Fixed Header ── */}
+        {/* ── Fixed Header with Date/Time ── */}
         <header className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-white/30 shadow-sm flex-shrink-0">
           <div className="flex flex-wrap items-center justify-between px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-3 lg:py-4 gap-2">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -643,12 +698,32 @@ function EmployeeDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-wrap">
+              {/* Glass Date/Time Capsule */}
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/40 backdrop-blur-xl rounded-2xl border border-white/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <FiCalendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-[6px] sm:text-[7px] text-gray-500 uppercase tracking-wider font-medium">Time</p>
+                    <p className="text-[8px] sm:text-[10px] font-semibold text-gray-700 whitespace-nowrap animate-pulse-slow">
+                      {currentDateTime}
+                    </p>
+                  </div>
+                </div>
+                <div className="w-px h-6 bg-gray-300/50"></div>
+                <div className="flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                  <span className="text-[6px] sm:text-[8px] text-emerald-600 font-medium">Live</span>
+                </div>
+              </div>
+
               <button
                 onClick={navigateToNotifications}
                 className="relative px-2 sm:px-3 lg:px-4 py-1 sm:py-1.5 lg:py-2 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-white/70 transition-all hover:scale-105 flex items-center gap-1 sm:gap-2"
               >
                 <FiBell className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-indigo-600" />
-                <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 hidden xs:inline">My Notifications</span>
+                <span className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 hidden xs:inline">Notifications</span>
                 {notificationCount > 0 && (
                   <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 bg-gradient-to-r from-rose-500 to-rose-600 text-white text-[8px] sm:text-[10px] font-bold rounded-full shadow-lg shadow-rose-500/30 animate-pulse-slow">
                     {notificationCount > 99 ? '99+' : notificationCount}
@@ -698,43 +773,43 @@ function EmployeeDashboard() {
               </div>
             ) : (
               <>
-                {/* Stat Cards */}
+                {/* Stat Cards - FIXED ICONS */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
                   <StatCard 
                     label="Total Tasks" 
                     value={totalAssignedTasks} 
-                    icon={<FiBarChart2 className="w-4 h-4 sm:w-5 sm:h-5" />} 
-                    gradient="bg-gradient-to-r from-indigo-400 to-indigo-500 shadow-indigo-500/30" 
+                    icon={<FiBarChart2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
+                    gradient="from-indigo-500 to-indigo-600" 
                   />
                   <StatCard 
                     label="In Progress" 
                     value={inProgressTasks} 
-                    icon={<FiRefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />} 
-                    gradient="bg-gradient-to-r from-blue-400 to-blue-500 shadow-blue-500/30" 
+                    icon={<FiRefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
+                    gradient="from-blue-500 to-blue-600" 
                   />
                   <StatCard 
                     label="Completed" 
                     value={completedTasks} 
-                    icon={<FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />} 
-                    gradient="bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-emerald-500/30" 
+                    icon={<FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
+                    gradient="from-emerald-500 to-emerald-600" 
                   />
                   <StatCard 
                     label="Pending" 
                     value={pendingTasks} 
-                    icon={<FiClock className="w-4 h-4 sm:w-5 sm:h-5" />} 
-                    gradient="bg-gradient-to-r from-amber-400 to-amber-500 shadow-amber-500/30" 
+                    icon={<FiClock className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
+                    gradient="from-purple-500 to-purple-600" 
                   />
                   <StatCard 
                     label="Overdue" 
                     value={overdueTasks} 
-                    icon={<FiAlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />} 
-                    gradient="bg-gradient-to-r from-rose-400 to-rose-500 shadow-rose-500/30" 
+                    icon={<FiAlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
+                    gradient="from-rose-500 to-rose-600" 
                   />
                   <StatCard 
                     label="Completion Rate" 
                     value={`${completionRate}%`} 
-                    icon={<FiTrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />} 
-                    gradient="bg-gradient-to-r from-purple-400 to-purple-500 shadow-purple-500/30" 
+                    icon={<FiTrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
+                    gradient="from-teal-500 to-teal-600" 
                   />
                 </div>
 
@@ -748,19 +823,29 @@ function EmployeeDashboard() {
                     <span className="text-[8px] sm:text-xs text-gray-400">Get things done</span>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     <QuickActionCard 
-                      icon={<FiPlus className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      icon={<FiPlus className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
                       label="Add New Task"
-                      color="from-emerald-400 to-emerald-500"
+                      color="from-emerald-500 to-emerald-600"
+                      description="Create a new task"
                       onClick={navigateToCreateTask}
                     />
                     
                     <QuickActionCard 
-                      icon={<FiList className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      icon={<FiList className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
                       label="My Tasks"
-                      color="from-indigo-400 to-purple-500"
+                      color="from-indigo-500 to-purple-600"
+                      description="View all your tasks"
                       onClick={navigateToMyTasks}
+                    />
+
+                    <QuickActionCard 
+                      icon={<FiSun className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
+                      label="Today's Tasks"
+                      color="from-amber-500 to-orange-600"
+                      description="View today's tasks"
+                      onClick={navigateToTodayTasks}
                     />
                   </div>
                 </section>
@@ -797,13 +882,14 @@ function EmployeeDashboard() {
                       <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 text-center">Performance Overview</h3>
                       <div className="w-full h-[180px] sm:h-[200px] md:h-[240px] lg:h-[280px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={performanceData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                          <ComposedChart data={performanceData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                             <XAxis dataKey="name" tick={{ fontSize: 8 }} interval={0} />
                             <YAxis tick={{ fontSize: 8 }} />
                             <Tooltip content={<PerformanceTooltip />} />
-                            <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1', r: 3 }} />
-                          </LineChart>
+                            <Bar dataKey="value" fill={CHART_COLORS.indigo} opacity={0.3} barSize={20} />
+                            <Line type="monotone" dataKey="value" stroke={CHART_COLORS.purple} strokeWidth={2} dot={{ fill: CHART_COLORS.purple, r: 4 }} />
+                          </ComposedChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
@@ -933,8 +1019,8 @@ function EmployeeDashboard() {
                           <PieChart>
                             <Pie
                               data={[
-                                { name: 'Issues', value: myReportedIssues || 1, color: '#ef4444' },
-                                { name: 'Expenses (₹)', value: Math.max(myExpenses / 100, 1), color: '#22c55e' }
+                                { name: 'Issues', value: myReportedIssues || 1, color: CHART_COLORS.danger },
+                                { name: 'Expenses (₹)', value: Math.max(myExpenses / 100, 1), color: CHART_COLORS.teal }
                               ]}
                               cx="50%"
                               cy="50%"
@@ -943,8 +1029,8 @@ function EmployeeDashboard() {
                               paddingAngle={3}
                               dataKey="value"
                             >
-                              <Cell fill="#ef4444" />
-                              <Cell fill="#22c55e" />
+                              <Cell fill={CHART_COLORS.danger} />
+                              <Cell fill={CHART_COLORS.teal} />
                             </Pie>
                             <Tooltip content={<CustomTooltip />} />
                             <Legend 
@@ -1092,6 +1178,23 @@ function EmployeeDashboard() {
         @media (min-width: 481px) {
           .xs\\:block { display: block; }
           .xs\\:hidden { display: none; }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: linear-gradient(to bottom, #6366f1, #8b5cf6);
+          border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(to bottom, #4f46e5, #7c3aed);
         }
       `}</style>
     </div>

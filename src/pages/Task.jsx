@@ -964,9 +964,7 @@ const ViewTaskModal = ({
   // WhatsApp click handler
   const handleWhatsAppClick = (phoneNumber) => {
     if (!phoneNumber) return;
-    // Remove any non-numeric characters
     const cleanNumber = phoneNumber.replace(/\D/g, '');
-    // Add country code if not present (assuming India +91)
     let number = cleanNumber;
     if (!number.startsWith('91') && number.length === 10) {
       number = '91' + number;
@@ -1069,7 +1067,6 @@ const ViewTaskModal = ({
                     <span className="text-gray-500">
                       {createdByUser && createdByUser.email ? createdByUser.email : 'N/A'}
                     </span>
-                    {/* WhatsApp Button with Phone Number */}
                     {createdByUser && createdByUser.phone && (
                       <button
                         onClick={() => handleWhatsAppClick(createdByUser.phone)}
@@ -1106,20 +1103,24 @@ const ViewTaskModal = ({
             </div>
           </div>
 
+          {/* Frequency Display */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {selectedTask.frequency && selectedTask.frequency.length > 0 ? (
+              selectedTask.frequency.map((freq, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 rounded-full text-[10px] sm:text-xs font-medium border border-indigo-200/50">
+                  <FiRepeat className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  {freq}
+                </span>
+              ))
+            ) : (
+              <span className="text-xs text-gray-400">No frequency set</span>
+            )}
+          </div>
+
           <div className="flex flex-col sm:flex-row justify-between items-start gap-2 sm:gap-0 mb-4 sm:mb-6">
             <div className="w-full sm:w-auto">
               <h3 className="text-base sm:text-xl font-bold text-gray-800">{selectedTask.taskName}</h3>
               <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">{selectedTask.title}</p>
-              {selectedTask.frequency && selectedTask.frequency.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {selectedTask.frequency.map((freq, idx) => (
-                    <span key={idx} className="inline-flex items-center gap-0.5 px-1.5 sm:px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[8px] sm:text-xs font-medium">
-                      <FiRepeat className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                      {freq}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
             <div className="flex flex-wrap gap-1.5 sm:gap-2">
               <span className={`inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${getPriorityStyles(selectedTask.priority)}`}>
@@ -1223,7 +1224,7 @@ const ViewTaskModal = ({
             </div>
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
               <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-500 mb-0.5 sm:mb-1">
-                <FaRocket className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <FiRepeat className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Frequency
               </div>
               <div className="flex flex-wrap gap-1">
@@ -1545,6 +1546,7 @@ function Task() {
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterDue, setFilterDue] = useState('all');
   const [filterCreatedBy, setFilterCreatedBy] = useState('all');
+  const [filterFrequency, setFilterFrequency] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -2024,6 +2026,13 @@ function Task() {
       filtered = getUpcomingTasksFilter(filtered);
     }
 
+    if (filterFrequency !== 'all') {
+      filtered = filtered.filter((task) => {
+        if (!task.frequency || task.frequency.length === 0) return false;
+        return task.frequency.includes(filterFrequency);
+      });
+    }
+
     if (filterCreatedBy === 'employee') {
       filtered = filtered.filter((task) => task.createdByType === 'employee');
     } else if (filterCreatedBy === 'admin') {
@@ -2070,53 +2079,67 @@ function Task() {
     allEmployees: employees,
   };
 
+  const getUniqueFrequencies = () => {
+    const freqSet = new Set();
+    tasks.forEach(task => {
+      if (task.frequency && task.frequency.length > 0) {
+        task.frequency.forEach(f => freqSet.add(f));
+      }
+    });
+    return Array.from(freqSet);
+  };
+
+  const uniqueFrequencies = getUniqueFrequencies();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30">
       <div className="flex flex-col lg:flex-row">
-        <div className="lg:hidden fixed top-2 left-2 z-50">
-          <button
-            onClick={toggleMobileMenu}
-            className="p-1.5 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/30 hover:bg-white transition-all hover:scale-105"
-            aria-label="Toggle menu"
-          >
-            {mobileMenuOpen ? (
-              <FiX className="w-4 h-4 text-gray-700" />
-            ) : (
-              <FiMenu className="w-4 h-4 text-gray-700" />
-            )}
-          </button>
+        {/* Sidebar - Fixed position */}
+        <div className="fixed top-0 left-0 h-full z-40" style={{ width: '280px' }}>
+          <Sidebar userRole={userRole} />
         </div>
 
+        {/* Mobile menu overlay */}
         <div 
           className={`
-            fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-all duration-300 lg:hidden
+            fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-all duration-300 lg:hidden
             ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
           `} 
           onClick={() => setMobileMenuOpen(false)}
         />
 
+        {/* Mobile menu toggle */}
+        <div className="lg:hidden fixed top-3 left-3 z-50">
+          <button
+            onClick={toggleMobileMenu}
+            className="p-2 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/30 hover:bg-white transition-all hover:scale-105"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? (
+              <FiX className="w-5 h-5 text-gray-700" />
+            ) : (
+              <FiMenu className="w-5 h-5 text-gray-700" />
+            )}
+          </button>
+        </div>
+
+        {/* Mobile sidebar */}
         <div 
           className={`
-            fixed top-0 left-0 h-full z-40 transition-all duration-300 ease-in-out
+            fixed top-0 left-0 h-full z-40 transition-all duration-300 ease-in-out lg:hidden
             ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-            lg:translate-x-0 lg:fixed
           `}
           style={{ width: '280px' }}
         >
           <Sidebar userRole={userRole} />
-          <button
-            onClick={() => setMobileMenuOpen(false)}
-            className="lg:hidden absolute top-2 right-2 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-            aria-label="Close menu"
-          >
-            <FiX className="w-4 h-4 text-white" />
-          </button>
         </div>
 
-        <div className="flex-1 min-h-screen w-full lg:pl-[280px] overflow-y-auto">
+        {/* Main content area with proper padding */}
+        <div className="flex-1 min-h-screen w-full lg:pl-[280px]">
+          {/* Fixed Navbar */}
           <nav className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-white/30 shadow-sm">
             <div className="flex flex-wrap items-center justify-between px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-3 lg:py-4 gap-2">
-              <div className="flex items-center gap-2 sm:gap-3 ml-10 lg:ml-0">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30 flex-shrink-0">
                   <FaTasks className="text-white w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
@@ -2156,7 +2179,8 @@ function Task() {
             </div>
           </nav>
 
-          <div className="p-3 sm:p-4 md:p-6 lg:p-8">
+          {/* Scrollable content */}
+          <div className="p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto" style={{ height: 'calc(100vh - 80px)' }}>
             {showUpcomingPopup && upcomingTasks.length > 0 && (
               <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
                 <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-slideDown relative">
@@ -2269,6 +2293,7 @@ function Task() {
               </button>
             </div>
 
+            {/* Rest of your content... */}
             {stats && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6 lg:mb-8">
                 {[
@@ -2329,6 +2354,16 @@ function Task() {
                 <option value="Low">Low</option>
               </select>
               <select
+                value={filterFrequency}
+                onChange={(e) => setFilterFrequency(e.target.value)}
+                className="px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm min-w-[100px] sm:min-w-[130px]"
+              >
+                <option value="all">All Frequency</option>
+                {uniqueFrequencies.map((freq) => (
+                  <option key={freq} value={freq}>{freq}</option>
+                ))}
+              </select>
+              <select
                 value={filterCreatedBy}
                 onChange={(e) => setFilterCreatedBy(e.target.value)}
                 className="px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm min-w-[120px] sm:min-w-[150px]"
@@ -2362,6 +2397,7 @@ function Task() {
                   setFilterPriority('all');
                   setFilterDue('all');
                   setFilterCreatedBy('all');
+                  setFilterFrequency('all');
                 }}
                 className="px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-full text-[10px] sm:text-sm font-medium text-gray-600 hover:bg-white/60 transition-all flex items-center gap-1.5 sm:gap-2"
               >
@@ -2370,10 +2406,19 @@ function Task() {
               </button>
             </div>
 
+            {/* Error Display */}
             {error && (
               <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-rose-50/80 backdrop-blur-sm border border-rose-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-rose-700 text-xs sm:text-sm">
                 <FiAlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 {error}
+              </div>
+            )}
+
+            {/* Filter Banners */}
+            {filterFrequency !== 'all' && (
+              <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 backdrop-blur-sm border border-indigo-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-indigo-700 text-xs sm:text-sm">
+                <FiRepeat className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="font-medium">Showing {filteredTasks.length} tasks with frequency: <span className="font-bold">{filterFrequency}</span></span>
               </div>
             )}
 
@@ -2398,6 +2443,7 @@ function Task() {
               </div>
             )}
 
+            {/* Loading State */}
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16 sm:py-20 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/30">
                 <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></div>
@@ -2412,6 +2458,8 @@ function Task() {
                 <p className="text-xs sm:text-sm text-gray-400 mt-1">
                   {filterDue === 'upcoming' 
                     ? 'No upcoming tasks! All tasks are completed or not due yet 🎉'
+                    : filterFrequency !== 'all'
+                    ? `No tasks found with frequency: ${filterFrequency}`
                     : filterCreatedBy === 'employee'
                     ? 'No tasks created by employees yet!'
                     : filterCreatedBy === 'admin'
@@ -2420,6 +2468,7 @@ function Task() {
                 </p>
               </div>
             ) : (
+              // Task Table - Same as before
               <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-white/30 shadow-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[700px] sm:min-w-[800px]">
@@ -2428,6 +2477,7 @@ function Task() {
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Task</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Priority</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Frequency</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Progress</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Submit Date</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Created By</th>
@@ -2440,11 +2490,8 @@ function Task() {
                         const isUpcoming = task.submitDate && task.status !== 'Completed' && task.status !== 'Rejected';
                         const daysLeft = isUpcoming ? Math.ceil((new Date(task.submitDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
                         
-                        // Get created by user info with proper null checks
                         const createdByUser = task.createdBy;
                         const isEmployeeCreated = task.createdByType === 'employee';
-                        
-                        // Get creator name with proper null checks
                         let creatorName = 'Admin';
                         let creatorInitial = 'A';
                         if (createdByUser && typeof createdByUser === 'object') {
@@ -2481,6 +2528,20 @@ function Task() {
                                 {getStatusIcon(task.status)}
                                 {task.status}
                               </span>
+                            </td>
+                            <td className="px-3 sm:px-6 py-2 sm:py-3">
+                              <div className="flex flex-wrap gap-0.5">
+                                {task.frequency && task.frequency.length > 0 ? (
+                                  task.frequency.map((freq, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[7px] sm:text-[10px] font-medium">
+                                      <FiRepeat className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
+                                      {freq}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-[8px] sm:text-xs text-gray-400">—</span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-3">
                               <div className="flex items-center gap-1 sm:gap-2">
@@ -2601,6 +2662,7 @@ function Task() {
               </div>
             )}
 
+            {/* Modals remain the same */}
             {showCreateModal && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
                 <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">

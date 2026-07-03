@@ -8,12 +8,12 @@ import {
   FiChevronLeft, 
   FiChevronRight,
   FiUser,
-  FiZap,
   FiLogOut,
   FiSettings,
   FiBell
 } from 'react-icons/fi';
 import { FaTasks } from 'react-icons/fa';
+import Logo from './images/iglogo.png'; // 👈 Import the logo
 
 function Sidebar({ userRole, onLogout }) {
   const navigate = useNavigate();
@@ -39,7 +39,6 @@ function Sidebar({ userRole, onLogout }) {
       icon: <FiAlertCircle className="w-5 h-5" />,
       path: '/issues'
     }] : []),
-    // ─── NEW: Notifications Section ───
     {
       id: 'notifications',
       label: 'Notifications',
@@ -48,7 +47,7 @@ function Sidebar({ userRole, onLogout }) {
     },
     {
       id: 'staff',
-      label: 'Staff',
+      label: 'Employee',
       icon: <FiUsers className="w-5 h-5" />,
       path: '/staff'
     },
@@ -103,15 +102,20 @@ function Sidebar({ userRole, onLogout }) {
           flex items-center gap-3
           ${isCollapsed ? 'justify-center w-full' : ''}
         `}>
+          {/* Logo Image - Replaces the Zap icon */}
           <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 
             flex items-center justify-center shadow-lg shadow-indigo-500/30
-            transition-all hover:scale-105">
-            <FiZap className="text-white w-5 h-5" />
+            transition-all hover:scale-105 p-1.5">
+            <img 
+              src={Logo} 
+              alt="INGRAIN Logo" 
+              className="w-full h-full object-contain rounded-lg"
+            />
           </div>
           {!isCollapsed && (
             <span className="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 
               bg-clip-text text-transparent">
-              TaskFlow
+              INGRAIN'S TMS
             </span>
           )}
         </div>

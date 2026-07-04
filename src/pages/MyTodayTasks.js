@@ -1864,15 +1864,49 @@ function MyTodayTasks() {
                 </div>
               )}
 
-              {viewTask.voiceNote && (
-                <div className="mb-2 sm:mb-4">
-                  <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
-                    <FiMic className="w-3 h-3 sm:w-4 sm:h-4" />
-                    Voice Note
-                  </h4>
-                  <audio controls src={viewTask.voiceNote} className="w-full" />
-                </div>
-              )}
+             {viewTask.voiceNote && (
+  <div className="mb-2 sm:mb-4">
+    <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
+      <FiMic className="w-3 h-3 sm:w-4 sm:h-4" />
+      Voice Note
+    </h4>
+    <div className="bg-white/30 backdrop-blur-sm rounded-lg p-2 sm:p-3 border border-white/30">
+      <audio 
+        controls 
+        src={`${BASE_URL}/${viewTask.voiceNote}`}
+        className="w-full"
+        onError={(e) => {
+          console.error('Audio error:', e);
+          const parent = e.target.parentElement;
+          const fileName = viewTask.voiceNote.split('/').pop();
+          parent.innerHTML = `
+            <div class="text-xs text-amber-600 flex flex-col items-center gap-2 p-3 bg-amber-50/50 rounded-lg">
+              <div class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span class="font-medium">Unable to load voice note</span>
+              </div>
+              <p class="text-[10px] text-gray-500">File: ${fileName}</p>
+              <div class="flex gap-2 mt-1">
+                <button onclick="window.open('${BASE_URL}/${viewTask.voiceNote}', '_blank')" 
+                  class="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs hover:bg-indigo-200 transition-colors">
+                  Open in New Tab
+                </button>
+                <button onclick="window.location.href='${BASE_URL}/${viewTask.voiceNote}'" 
+                  class="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs hover:bg-emerald-200 transition-colors">
+                  Download
+                </button>
+              </div>
+            </div>
+          `;
+        }}
+      />
+    </div>
+  </div>
+)}
 
               <div className="flex flex-col-reverse sm:flex-row justify-end gap-1.5 sm:gap-3 mt-3 sm:mt-6 pt-2 sm:pt-4 border-t border-gray-100/50">
                 <button onClick={() => { setShowViewModal(false); setViewTask(null); }} className="px-2 sm:px-4 py-1 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-gray-700 font-medium hover:bg-gray-200 transition-all text-[10px] sm:text-sm">

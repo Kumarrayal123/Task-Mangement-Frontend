@@ -995,6 +995,133 @@ function Login() {
   const [popupStatus, setPopupStatus] = useState('⏳ Fetching...');
   const [employeeData, setEmployeeData] = useState(null);
 
+  // ─── FIXED: Force speech with maximum volume ───
+  const speakWelcome = (name, role) => {
+    console.log('🔊 Attempting to speak:', name, role);
+    
+    // Cancel any ongoing speech
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    // Try multiple voices and volumes
+    const trySpeak = (message, voiceIndex = 0) => {
+      if (!window.speechSynthesis) {
+        console.log('❌ Speech synthesis not available');
+        return false;
+      }
+      
+      try {
+        const utterance = new SpeechSynthesisUtterance(message);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.85;
+        utterance.pitch = 1.1;
+        utterance.volume = 1.0; // MAX VOLUME
+        
+        // Get all available voices
+        const voices = window.speechSynthesis.getVoices();
+        console.log('🎤 Available voices:', voices.map(v => v.name).join(', '));
+        
+        // Try female voices first
+        const femaleVoices = voices.filter(v => 
+          v.name.toLowerCase().includes('female') || 
+          v.name.toLowerCase().includes('samantha') ||
+          v.name.toLowerCase().includes('victoria') ||
+          v.name.toLowerCase().includes('karen') ||
+          v.name.toLowerCase().includes('zira') ||
+          v.name.toLowerCase().includes('google uk female')
+        );
+        
+        // Try male voices next
+        const maleVoices = voices.filter(v => 
+          v.name.toLowerCase().includes('male') || 
+          v.name.toLowerCase().includes('daniel') ||
+          v.name.toLowerCase().includes('david') ||
+          v.name.toLowerCase().includes('alex') ||
+          v.name.toLowerCase().includes('google uk male')
+        );
+        
+        // Choose voice based on index
+        let selectedVoice = null;
+        if (voiceIndex < femaleVoices.length) {
+          selectedVoice = femaleVoices[voiceIndex];
+        } else if (voiceIndex - femaleVoices.length < maleVoices.length) {
+          selectedVoice = maleVoices[voiceIndex - femaleVoices.length];
+        } else if (voices.length > 0) {
+          selectedVoice = voices[voiceIndex % voices.length];
+        }
+        
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+          console.log('🎤 Using voice:', selectedVoice.name);
+        }
+        
+        // Add event listeners to track speech
+        utterance.onstart = () => {
+          console.log('✅ Speech started successfully!');
+        };
+        
+        utterance.onend = () => {
+          console.log('✅ Speech ended successfully!');
+        };
+        
+        utterance.onerror = (event) => {
+          console.log('❌ Speech error:', event);
+        };
+        
+        window.speechSynthesis.speak(utterance);
+        return true;
+        
+      } catch (err) {
+        console.log('❌ Speech error:', err);
+        return false;
+      }
+    };
+
+    // Try multiple times with different voices
+    const speakWithRetry = (attempt = 0) => {
+      const message = `Welcome ${name}! You are logged in as ${role}. Have a great day!`;
+      const success = trySpeak(message, attempt);
+      
+      if (!success && attempt < 5) {
+        console.log(`🔄 Retry ${attempt + 1}/5...`);
+        setTimeout(() => speakWithRetry(attempt + 1), 500);
+      }
+    };
+
+    // Wait for voices and speak
+    const initSpeech = () => {
+      if (window.speechSynthesis.getVoices().length > 0) {
+        speakWithRetry(0);
+      } else {
+        window.speechSynthesis.onvoiceschanged = () => {
+          speakWithRetry(0);
+        };
+        // Fallback: try after 1 second
+        setTimeout(() => {
+          if (window.speechSynthesis.getVoices().length > 0) {
+            speakWithRetry(0);
+          } else {
+            // Force speak without voice selection
+            try {
+              const utterance = new SpeechSynthesisUtterance(`Welcome ${name}!`);
+              utterance.volume = 1.0;
+              utterance.rate = 0.9;
+              utterance.pitch = 1;
+              window.speechSynthesis.speak(utterance);
+              console.log('🔊 Force speak without voice selection');
+            } catch (err) {
+              console.log('❌ Force speak failed:', err);
+            }
+          }
+        }, 1000);
+      }
+    };
+
+    // Small delay to ensure everything is ready
+    setTimeout(initSpeech, 300);
+  };
+
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const employeeId = urlParams.get('employeeId');
@@ -1030,18 +1157,6 @@ function Login() {
         });
     }
   }, [location]);
-
-  const speakWelcome = (name, role) => {
-    if ('speechSynthesis' in window) {
-      const message = `Welcome ${name}! You are logged in as ${role}. Have a great day!`;
-      const utterance = new SpeechSynthesisUtterance(message);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.9;
-      utterance.pitch = 1;
-      utterance.volume = 1;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -1097,11 +1212,14 @@ function Login() {
       setUserRole(role);
       setShowWelcome(true);
       setShowPopup(false);
-      speakWelcome(name, role);
+      
+      setTimeout(() => {
+        speakWelcome(name, role);
+      }, 1000);
       
       setTimeout(() => {
         navigate("/employee-dashboard", { replace: true });
-      }, 2500);
+      }, 3000);
 
     } catch (err) {
       try {
@@ -1135,11 +1253,14 @@ function Login() {
         setUserRole('Admin');
         setShowWelcome(true);
         setShowPopup(false);
-        speakWelcome(name, 'Admin');
+        
+        setTimeout(() => {
+          speakWelcome(name, 'Admin');
+        }, 1000);
         
         setTimeout(() => {
           navigate("/admin-dashboard", { replace: true });
-        }, 2500);
+        }, 3000);
 
       } catch (adminErr) {
         setError(adminErr.response?.data?.message || "Invalid email or password");
@@ -1148,6 +1269,34 @@ function Login() {
       }
     } finally {
       if (!showWelcome) setLoading(false);
+    }
+  };
+
+  // ─── Function to test speech synthesis ───
+  const testSpeech = () => {
+    console.log('🔊 Testing speech synthesis...');
+    if (window.speechSynthesis) {
+      const utterance = new SpeechSynthesisUtterance('Hello! This is a test. Can you hear me?');
+      utterance.volume = 1.0;
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      
+      const voices = window.speechSynthesis.getVoices();
+      const femaleVoice = voices.find(v => 
+        v.name.toLowerCase().includes('female') || 
+        v.name.toLowerCase().includes('samantha')
+      );
+      if (femaleVoice) {
+        utterance.voice = femaleVoice;
+      }
+      
+      utterance.onstart = () => console.log('✅ Test speech started');
+      utterance.onend = () => console.log('✅ Test speech ended');
+      utterance.onerror = (e) => console.log('❌ Test speech error:', e);
+      
+      window.speechSynthesis.speak(utterance);
+    } else {
+      console.log('❌ Speech synthesis not available');
     }
   };
 
@@ -1162,14 +1311,13 @@ function Login() {
       overflow: 'hidden',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
-      {/* Animated Background with Shining Effect */}
+      {/* Animated Background */}
       <div style={{
         position: 'absolute',
         inset: 0,
         overflow: 'hidden',
         zIndex: 0
       }}>
-        {/* Shining Light Rays */}
         <div style={{
           position: 'absolute',
           top: '-50%',
@@ -1203,7 +1351,6 @@ function Login() {
           pointerEvents: 'none'
         }}></div>
 
-        {/* Floating Orbs with Shimmer */}
         <div style={{
           position: 'absolute',
           width: '600px',
@@ -1264,7 +1411,6 @@ function Login() {
           animationDelay: '-12s'
         }}></div>
 
-        {/* Moving Sparkles */}
         <div style={{
           position: 'absolute',
           width: '4px',
@@ -1568,6 +1714,72 @@ function Login() {
               You have been successfully logged in to{' '}
               <strong style={{ color: 'rgba(255, 255, 255, 0.9)' }}>INGRAIN'S TMS</strong>
             </p>
+            
+            {/* ─── TEST SPEECH BUTTON ─── */}
+            <button
+              onClick={testSpeech}
+              style={{
+                padding: '10px 24px',
+                background: 'rgba(99, 102, 241, 0.25)',
+                border: '1px solid rgba(99, 102, 241, 0.4)',
+                borderRadius: '25px',
+                color: '#a5b4fc',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                marginBottom: '16px',
+                transition: 'all 0.3s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.4)';
+                e.currentTarget.style.transform = 'scale(1.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.25)';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              🔊 Test Sound
+            </button>
+            
+            {/* ─── SPEAK WELCOME BUTTON ─── */}
+            <button
+              onClick={() => {
+                if (userName) {
+                  speakWelcome(userName, userRole);
+                }
+              }}
+              style={{
+                padding: '10px 24px',
+                background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.1))',
+                border: '1px solid rgba(52, 211, 153, 0.3)',
+                borderRadius: '25px',
+                color: '#6ee7b7',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                marginBottom: '16px',
+                transition: 'all 0.3s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginLeft: '8px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(52, 211, 153, 0.3)';
+                e.currentTarget.style.transform = 'scale(1.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.1))';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              🎤 Welcome Message
+            </button>
+            
             <div style={{ width: '100%' }}>
               <div style={{ 
                 width: '100%', 
@@ -1613,7 +1825,6 @@ function Login() {
         animation: 'slideIn 0.6s ease-out'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '35px' }}>
-          {/* Logo Image */}
           <div style={{
             width: '80px',
             height: '80px',
@@ -1682,7 +1893,6 @@ function Login() {
             </div>
           )}
 
-          {/* Email Input */}
           <div style={{ position: 'relative' }}>
             <div style={{
               position: 'absolute',
@@ -1728,7 +1938,6 @@ function Login() {
             />
           </div>
 
-          {/* Password Input */}
           <div style={{
             position: 'relative',
             display: 'flex',
@@ -1783,38 +1992,37 @@ function Login() {
                 boxSizing: 'border-box'
               }}
             />
-           <button
-  type="button"
-  onClick={() => setShowPassword(!showPassword)}
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'transparent',
-    border: 'none',
-    color: 'rgba(255, 255, 255, 0.4)',
-    cursor: 'pointer',
-    padding: '6px',
-    marginRight: '8px',
-    borderRadius: '6px',
-    flexShrink: 0,
-    transition: 'all 0.3s ease',
-    transform: 'translateY(-10px)' // 👈 aur upar
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
-    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.4)';
-    e.currentTarget.style.background = 'transparent';
-  }}
->
-  {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
-</button>
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.4)',
+                cursor: 'pointer',
+                padding: '6px',
+                marginRight: '8px',
+                borderRadius: '6px',
+                flexShrink: 0,
+                transition: 'all 0.3s ease',
+                transform: 'translateY(-10px)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.4)';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
+            </button>
           </div>
 
-          {/* Form Options */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
@@ -1855,7 +2063,6 @@ function Login() {
             </a>
           </div>
 
-          {/* Login Button */}
           <button
             ref={loginButtonRef}
             type="submit"
@@ -1911,7 +2118,6 @@ function Login() {
             )}
           </button>
 
-          {/* Footer */}
           <div style={{ 
             textAlign: 'center', 
             fontSize: '13px', 

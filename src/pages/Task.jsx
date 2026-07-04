@@ -946,7 +946,6 @@ const ViewTaskModal = ({
   const reportedIssues = selectedTask.reportedIssues || [];
   const subtasks = selectedTask.subtasks || [];
 
-  // Get created by user details with proper null checks
   const getCreatedByDetails = () => {
     const createdBy = selectedTask.createdBy;
     if (!createdBy) return null;
@@ -961,7 +960,6 @@ const ViewTaskModal = ({
 
   const createdByUser = getCreatedByDetails();
 
-  // WhatsApp click handler
   const handleWhatsAppClick = (phoneNumber) => {
     if (!phoneNumber) return;
     const cleanNumber = phoneNumber.replace(/\D/g, '');
@@ -1494,13 +1492,61 @@ const ViewTaskModal = ({
             </div>
           )}
 
+          {/* ─── FIXED: Voice Note Section with proper audio handling ─── */}
           {selectedTask.voiceNote && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
                 <FiMic className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Voice Note
               </h4>
-              <audio controls src={selectedTask.voiceNote} className="w-full" />
+              <div className="bg-white/30 backdrop-blur-sm rounded-lg p-2 sm:p-3 border border-white/30">
+                <audio 
+                  controls 
+                  src={`${BASE_URL}/${selectedTask.voiceNote}`}
+                  className="w-full"
+                  preload="metadata"
+                  onLoadedMetadata={(e) => {
+                    console.log('✅ Audio loaded:', e.target.duration, 'seconds');
+                  }}
+                  onError={(e) => {
+                    console.error('❌ Audio error:', e);
+                    const audio = e.target;
+                    const parent = audio.parentElement;
+                    
+                    // Try reloading once
+                    if (audio.networkState === 3) {
+                      audio.load();
+                      setTimeout(() => {
+                        if (audio.networkState === 3) {
+                          parent.innerHTML = `
+                            <div class="text-xs text-amber-600 flex flex-col items-center gap-2 p-3 bg-amber-50/50 rounded-lg">
+                              <div class="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                  <circle cx="12" cy="12" r="10"/>
+                                  <line x1="12" y1="8" x2="12" y2="12"/>
+                                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                </svg>
+                                <span class="font-medium">Unable to load voice note</span>
+                              </div>
+                              <p class="text-[10px] text-gray-500">File: ${selectedTask.voiceNote.split('/').pop()}</p>
+                              <div class="flex gap-2 mt-1">
+                                <button onclick="window.open('${BASE_URL}/${selectedTask.voiceNote}', '_blank')" 
+                                  class="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs hover:bg-indigo-200 transition-colors">
+                                  Open in New Tab
+                                </button>
+                                <button onclick="window.location.href='${BASE_URL}/${selectedTask.voiceNote}'" 
+                                  class="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs hover:bg-emerald-200 transition-colors">
+                                  Download
+                                </button>
+                              </div>
+                            </div>
+                          `;
+                        }
+                      }, 1000);
+                    }
+                  }}
+                />
+              </div>
             </div>
           )}
 
@@ -2094,12 +2140,10 @@ function Task() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30">
       <div className="flex flex-col lg:flex-row">
-        {/* Sidebar - Fixed position */}
         <div className="fixed top-0 left-0 h-full z-40" style={{ width: '280px' }}>
           <Sidebar userRole={userRole} />
         </div>
 
-        {/* Mobile menu overlay */}
         <div 
           className={`
             fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-all duration-300 lg:hidden
@@ -2108,7 +2152,6 @@ function Task() {
           onClick={() => setMobileMenuOpen(false)}
         />
 
-        {/* Mobile menu toggle */}
         <div className="lg:hidden fixed top-3 left-3 z-50">
           <button
             onClick={toggleMobileMenu}
@@ -2123,7 +2166,6 @@ function Task() {
           </button>
         </div>
 
-        {/* Mobile sidebar */}
         <div 
           className={`
             fixed top-0 left-0 h-full z-40 transition-all duration-300 ease-in-out lg:hidden
@@ -2134,9 +2176,7 @@ function Task() {
           <Sidebar userRole={userRole} />
         </div>
 
-        {/* Main content area with proper padding */}
         <div className="flex-1 min-h-screen w-full lg:pl-[280px]">
-          {/* Fixed Navbar */}
           <nav className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-white/30 shadow-sm">
             <div className="flex flex-wrap items-center justify-between px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-3 lg:py-4 gap-2">
               <div className="flex items-center gap-2 sm:gap-3">
@@ -2179,8 +2219,8 @@ function Task() {
             </div>
           </nav>
 
-          {/* Scrollable content */}
           <div className="p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto" style={{ height: 'calc(100vh - 80px)' }}>
+            {/* Rest of the content remains same... */}
             {showUpcomingPopup && upcomingTasks.length > 0 && (
               <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
                 <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-slideDown relative">
@@ -2293,7 +2333,6 @@ function Task() {
               </button>
             </div>
 
-            {/* Rest of your content... */}
             {stats && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6 lg:mb-8">
                 {[
@@ -2406,7 +2445,6 @@ function Task() {
               </button>
             </div>
 
-            {/* Error Display */}
             {error && (
               <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-rose-50/80 backdrop-blur-sm border border-rose-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-rose-700 text-xs sm:text-sm">
                 <FiAlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -2414,36 +2452,6 @@ function Task() {
               </div>
             )}
 
-            {/* Filter Banners */}
-            {filterFrequency !== 'all' && (
-              <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 backdrop-blur-sm border border-indigo-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-indigo-700 text-xs sm:text-sm">
-                <FiRepeat className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="font-medium">Showing {filteredTasks.length} tasks with frequency: <span className="font-bold">{filterFrequency}</span></span>
-              </div>
-            )}
-
-            {filterDue === 'upcoming' && (
-              <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-r from-purple-50/80 to-indigo-50/80 backdrop-blur-sm border border-purple-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-purple-700 text-xs sm:text-sm">
-                <FiBell className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="font-medium">Showing {filteredTasks.length} upcoming tasks sorted by due date</span>
-              </div>
-            )}
-
-            {filterCreatedBy === 'employee' && (
-              <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 backdrop-blur-sm border border-emerald-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-emerald-700 text-xs sm:text-sm">
-                <FiUser className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="font-medium">Showing {filteredTasks.length} tasks created by employees</span>
-              </div>
-            )}
-
-            {filterCreatedBy === 'admin' && (
-              <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 backdrop-blur-sm border border-indigo-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-indigo-700 text-xs sm:text-sm">
-                <FiUserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="font-medium">Showing {filteredTasks.length} tasks created by admin</span>
-              </div>
-            )}
-
-            {/* Loading State */}
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16 sm:py-20 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/30">
                 <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></div>
@@ -2468,7 +2476,6 @@ function Task() {
                 </p>
               </div>
             ) : (
-              // Task Table - Same as before
               <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-white/30 shadow-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[700px] sm:min-w-[800px]">
@@ -2662,7 +2669,6 @@ function Task() {
               </div>
             )}
 
-            {/* Modals remain the same */}
             {showCreateModal && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
                 <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">

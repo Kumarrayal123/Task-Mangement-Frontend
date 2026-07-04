@@ -967,6 +967,7 @@
 
 
 
+// src/components/Login.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -979,6 +980,7 @@ function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const loginButtonRef = useRef(null);
+  const autoLoginAttempted = useRef(false);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -995,53 +997,40 @@ function Login() {
   const [popupStatus, setPopupStatus] = useState('⏳ Fetching...');
   const [employeeData, setEmployeeData] = useState(null);
 
-  // ─── FIXED: Force speech with maximum volume ───
+  // ─── SPEECH SYNTHESIS ───
   const speakWelcome = (name, role) => {
     console.log('🔊 Attempting to speak:', name, role);
     
-    // Cancel any ongoing speech
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
 
-    // Try multiple voices and volumes
     const trySpeak = (message, voiceIndex = 0) => {
-      if (!window.speechSynthesis) {
-        console.log('❌ Speech synthesis not available');
-        return false;
-      }
+      if (!window.speechSynthesis) return false;
       
       try {
         const utterance = new SpeechSynthesisUtterance(message);
         utterance.lang = 'en-US';
         utterance.rate = 0.85;
         utterance.pitch = 1.1;
-        utterance.volume = 1.0; // MAX VOLUME
+        utterance.volume = 1.0;
         
-        // Get all available voices
         const voices = window.speechSynthesis.getVoices();
-        console.log('🎤 Available voices:', voices.map(v => v.name).join(', '));
-        
-        // Try female voices first
         const femaleVoices = voices.filter(v => 
           v.name.toLowerCase().includes('female') || 
           v.name.toLowerCase().includes('samantha') ||
           v.name.toLowerCase().includes('victoria') ||
           v.name.toLowerCase().includes('karen') ||
-          v.name.toLowerCase().includes('zira') ||
-          v.name.toLowerCase().includes('google uk female')
+          v.name.toLowerCase().includes('zira')
         );
         
-        // Try male voices next
         const maleVoices = voices.filter(v => 
           v.name.toLowerCase().includes('male') || 
           v.name.toLowerCase().includes('daniel') ||
           v.name.toLowerCase().includes('david') ||
-          v.name.toLowerCase().includes('alex') ||
-          v.name.toLowerCase().includes('google uk male')
+          v.name.toLowerCase().includes('alex')
         );
         
-        // Choose voice based on index
         let selectedVoice = null;
         if (voiceIndex < femaleVoices.length) {
           selectedVoice = femaleVoices[voiceIndex];
@@ -1056,40 +1045,22 @@ function Login() {
           console.log('🎤 Using voice:', selectedVoice.name);
         }
         
-        // Add event listeners to track speech
-        utterance.onstart = () => {
-          console.log('✅ Speech started successfully!');
-        };
-        
-        utterance.onend = () => {
-          console.log('✅ Speech ended successfully!');
-        };
-        
-        utterance.onerror = (event) => {
-          console.log('❌ Speech error:', event);
-        };
-        
         window.speechSynthesis.speak(utterance);
         return true;
-        
       } catch (err) {
         console.log('❌ Speech error:', err);
         return false;
       }
     };
 
-    // Try multiple times with different voices
     const speakWithRetry = (attempt = 0) => {
       const message = `Welcome ${name}! You are logged in as ${role}. Have a great day!`;
       const success = trySpeak(message, attempt);
-      
       if (!success && attempt < 5) {
-        console.log(`🔄 Retry ${attempt + 1}/5...`);
         setTimeout(() => speakWithRetry(attempt + 1), 500);
       }
     };
 
-    // Wait for voices and speak
     const initSpeech = () => {
       if (window.speechSynthesis.getVoices().length > 0) {
         speakWithRetry(0);
@@ -1097,19 +1068,16 @@ function Login() {
         window.speechSynthesis.onvoiceschanged = () => {
           speakWithRetry(0);
         };
-        // Fallback: try after 1 second
         setTimeout(() => {
           if (window.speechSynthesis.getVoices().length > 0) {
             speakWithRetry(0);
           } else {
-            // Force speak without voice selection
             try {
               const utterance = new SpeechSynthesisUtterance(`Welcome ${name}!`);
               utterance.volume = 1.0;
               utterance.rate = 0.9;
               utterance.pitch = 1;
               window.speechSynthesis.speak(utterance);
-              console.log('🔊 Force speak without voice selection');
             } catch (err) {
               console.log('❌ Force speak failed:', err);
             }
@@ -1118,14 +1086,154 @@ function Login() {
       }
     };
 
-    // Small delay to ensure everything is ready
     setTimeout(initSpeech, 300);
   };
 
+  // ─── AUTO-LOGIN FROM URL PARAMS ───
+  const handleAutoLogin = async (email, password, role) => {
+    console.log('🚀 Auto-login triggered with:', { email, password, role });
+    
+    if (autoLoginAttempted.current) {
+      console.log('⚠️ Auto-login already attempted, skipping...');
+      return;
+    }
+    autoLoginAttempted.current = true;
+    
+    setLoading(true);
+    setFormData({ email, password });
+
+    try {
+      // Try employee login first
+      const employeeResponse = await axios.post(
+        `${BASE_URL}/employees/login`,
+        { email, password }
+      );
+
+      const responseData = employeeResponse.data;
+      const employee = responseData.employee || {};
+      const name = employee.name || responseData.name || 'Employee';
+      const userRole = employee.role || 'Employee';
+      const employeeId = employee.employeeId || employee.id || '';
+      
+      const userData = {
+        _id: employee.id || employee._id || '',
+        id: employee.id || employee._id || '',
+        name: name,
+        fullName: name,
+        employeeName: name,
+        firstName: name.split(' ')[0] || name,
+        email: email,
+        employeeId: employeeId,
+        role: userRole,
+        department: employee.department || '',
+        joinDate: employee.joinDate || '',
+        permissions: employee.permissions || [],
+        profileImage: employee.profileImage || employee.profile_image || employee.image || '',
+        employee: employee
+      };
+      
+      localStorage.setItem("userData", JSON.stringify(userData));
+      localStorage.setItem("employeeData", JSON.stringify(userData));
+      localStorage.setItem("employeeId", employeeId);
+      localStorage.setItem("employeeEmail", email);
+      localStorage.setItem("employeeName", name);
+      localStorage.setItem("employeeMongoId", employee._id || '');
+      
+      if (responseData.token) localStorage.setItem("token", responseData.token);
+      localStorage.setItem("userRole", "employee");
+
+      setUserName(name);
+      setUserRole(userRole);
+      setShowWelcome(true);
+      setShowPopup(false);
+      
+      setTimeout(() => speakWelcome(name, userRole), 1000);
+      setTimeout(() => navigate("/employee-dashboard", { replace: true }), 3000);
+
+    } catch (err) {
+      try {
+        // Try admin login
+        const adminResponse = await axios.post(
+          `${BASE_URL}/admin/login`,
+          { email, password }
+        );
+
+        const admin = adminResponse.data.admin || adminResponse.data.data || {};
+        const name = admin.name || adminResponse.data.name || 'Admin';
+        
+        const userData = {
+          _id: admin.id || admin._id || '',
+          id: admin.id || admin._id || '',
+          name: name,
+          fullName: name,
+          adminName: name,
+          email: admin.email || email,
+          role: 'Admin',
+          admin: admin
+        };
+        
+        localStorage.setItem("userData", JSON.stringify(userData));
+        localStorage.setItem("employeeData", JSON.stringify(userData));
+        localStorage.setItem("adminId", admin.id || admin._id || '');
+        localStorage.setItem("adminEmail", admin.email || email);
+        localStorage.setItem("adminName", name);
+        localStorage.setItem("userRole", "admin");
+
+        setUserName(name);
+        setUserRole('Admin');
+        setShowWelcome(true);
+        setShowPopup(false);
+        
+        setTimeout(() => speakWelcome(name, 'Admin'), 1000);
+        setTimeout(() => navigate("/admin-dashboard", { replace: true }), 3000);
+
+      } catch (adminErr) {
+        console.error('❌ Auto-login failed:', adminErr);
+        setError(adminErr.response?.data?.message || "Auto-login failed. Please try manually.");
+        setLoading(false);
+        setShowPopup(false);
+        autoLoginAttempted.current = false;
+      }
+    }
+  };
+
+  // ─── EFFECT: Check for URL params ───
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
-    const employeeId = urlParams.get('employeeId');
     
+    // ─── CHECK FOR AUTO-LOGIN PARAMS ───
+    const email = urlParams.get('email');
+    const password = urlParams.get('password');
+    const autoLogin = urlParams.get('autoLogin');
+    const role = urlParams.get('role') || 'employee';
+
+    console.log('🔍 URL Params:', { email, password, autoLogin, role });
+
+    if (autoLogin === 'true' && email && password) {
+      console.log('✅ Auto-login params found!');
+      
+      // Show popup with employee data
+      setShowPopup(true);
+      setPopupStatus('🔐 Auto-login in progress...');
+      
+      // Show employee data in popup
+      setEmployeeData({
+        email: email,
+        password: password,
+        name: 'Loading...',
+        role: role
+      });
+
+      // Small delay to show popup then login
+      setTimeout(() => {
+        handleAutoLogin(email, password, role);
+      }, 500);
+      
+      return;
+    }
+
+    // ─── CHECK FOR employeeId PARAM (Legacy support) ───
+    const employeeId = urlParams.get('employeeId');
     if (employeeId) {
       setShowPopup(true);
       setPopupStatus('⏳ Fetching employee data from API...');
@@ -1158,6 +1266,7 @@ function Login() {
     }
   }, [location]);
 
+  // ─── MANUAL LOGIN HANDLER ───
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
@@ -1213,13 +1322,8 @@ function Login() {
       setShowWelcome(true);
       setShowPopup(false);
       
-      setTimeout(() => {
-        speakWelcome(name, role);
-      }, 1000);
-      
-      setTimeout(() => {
-        navigate("/employee-dashboard", { replace: true });
-      }, 3000);
+      setTimeout(() => speakWelcome(name, role), 1000);
+      setTimeout(() => navigate("/employee-dashboard", { replace: true }), 3000);
 
     } catch (err) {
       try {
@@ -1254,13 +1358,8 @@ function Login() {
         setShowWelcome(true);
         setShowPopup(false);
         
-        setTimeout(() => {
-          speakWelcome(name, 'Admin');
-        }, 1000);
-        
-        setTimeout(() => {
-          navigate("/admin-dashboard", { replace: true });
-        }, 3000);
+        setTimeout(() => speakWelcome(name, 'Admin'), 1000);
+        setTimeout(() => navigate("/admin-dashboard", { replace: true }), 3000);
 
       } catch (adminErr) {
         setError(adminErr.response?.data?.message || "Invalid email or password");
@@ -1272,7 +1371,7 @@ function Login() {
     }
   };
 
-  // ─── Function to test speech synthesis ───
+  // ─── TEST SPEECH ───
   const testSpeech = () => {
     console.log('🔊 Testing speech synthesis...');
     if (window.speechSynthesis) {
@@ -1290,13 +1389,7 @@ function Login() {
         utterance.voice = femaleVoice;
       }
       
-      utterance.onstart = () => console.log('✅ Test speech started');
-      utterance.onend = () => console.log('✅ Test speech ended');
-      utterance.onerror = (e) => console.log('❌ Test speech error:', e);
-      
       window.speechSynthesis.speak(utterance);
-    } else {
-      console.log('❌ Speech synthesis not available');
     }
   };
 
@@ -1311,7 +1404,7 @@ function Login() {
       overflow: 'hidden',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
-      {/* Animated Background */}
+      {/* Background Animations */}
       <div style={{
         position: 'absolute',
         inset: 0,
@@ -1342,17 +1435,6 @@ function Login() {
 
         <div style={{
           position: 'absolute',
-          top: '-50%',
-          left: '-50%',
-          width: '200%',
-          height: '200%',
-          background: 'radial-gradient(ellipse at 50% 70%, rgba(236, 72, 153, 0.05) 0%, transparent 40%)',
-          animation: 'rotateShine 35s linear infinite',
-          pointerEvents: 'none'
-        }}></div>
-
-        <div style={{
-          position: 'absolute',
           width: '600px',
           height: '600px',
           background: 'radial-gradient(circle, rgba(99, 102, 241, 0.12), transparent 70%)',
@@ -1372,91 +1454,6 @@ function Login() {
           borderRadius: '50%',
           animation: 'float 20s infinite ease-in-out',
           animationDelay: '-3s'
-        }}></div>
-        
-        <div style={{
-          position: 'absolute',
-          width: '300px',
-          height: '300px',
-          background: 'radial-gradient(circle, rgba(236, 72, 153, 0.08), transparent 70%)',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          borderRadius: '50%',
-          animation: 'float 20s infinite ease-in-out',
-          animationDelay: '-6s'
-        }}></div>
-        
-        <div style={{
-          position: 'absolute',
-          width: '200px',
-          height: '200px',
-          background: 'radial-gradient(circle, rgba(52, 211, 153, 0.07), transparent 70%)',
-          top: '10%',
-          left: '10%',
-          borderRadius: '50%',
-          animation: 'float 20s infinite ease-in-out',
-          animationDelay: '-9s'
-        }}></div>
-        
-        <div style={{
-          position: 'absolute',
-          width: '250px',
-          height: '250px',
-          background: 'radial-gradient(circle, rgba(251, 191, 36, 0.06), transparent 70%)',
-          bottom: '20%',
-          right: '15%',
-          borderRadius: '50%',
-          animation: 'float 20s infinite ease-in-out',
-          animationDelay: '-12s'
-        }}></div>
-
-        <div style={{
-          position: 'absolute',
-          width: '4px',
-          height: '4px',
-          background: 'white',
-          borderRadius: '50%',
-          top: '20%',
-          left: '10%',
-          boxShadow: '0 0 20px rgba(99, 102, 241, 0.8)',
-          animation: 'sparkle 4s ease-in-out infinite'
-        }}></div>
-        <div style={{
-          position: 'absolute',
-          width: '3px',
-          height: '3px',
-          background: 'white',
-          borderRadius: '50%',
-          top: '60%',
-          right: '15%',
-          boxShadow: '0 0 15px rgba(168, 85, 247, 0.8)',
-          animation: 'sparkle 5s ease-in-out infinite',
-          animationDelay: '1s'
-        }}></div>
-        <div style={{
-          position: 'absolute',
-          width: '5px',
-          height: '5px',
-          background: 'white',
-          borderRadius: '50%',
-          bottom: '30%',
-          left: '20%',
-          boxShadow: '0 0 25px rgba(236, 72, 153, 0.8)',
-          animation: 'sparkle 3.5s ease-in-out infinite',
-          animationDelay: '2s'
-        }}></div>
-        <div style={{
-          position: 'absolute',
-          width: '3px',
-          height: '3px',
-          background: 'white',
-          borderRadius: '50%',
-          top: '40%',
-          right: '30%',
-          boxShadow: '0 0 15px rgba(52, 211, 153, 0.8)',
-          animation: 'sparkle 4.5s ease-in-out infinite',
-          animationDelay: '0.5s'
         }}></div>
       </div>
 
@@ -1499,6 +1496,7 @@ function Login() {
               {popupStatus.includes('✅') && <FiCheckCircle size={32} color="#34d399" />}
               {popupStatus.includes('🚀') && <span style={{ fontSize: '32px' }}>🚀</span>}
               {popupStatus.includes('❌') && <FiAlertCircle size={32} color="#f87171" />}
+              {popupStatus.includes('🔐') && <span style={{ fontSize: '32px' }}>🔐</span>}
             </div>
             <h3 style={{ 
               fontSize: '18px', 
@@ -1510,6 +1508,7 @@ function Login() {
               {popupStatus.includes('✅') && '✅ Employee Found!'}
               {popupStatus.includes('🚀') && '🚀 Logging in...'}
               {popupStatus.includes('❌') && '❌ Error'}
+              {popupStatus.includes('🔐') && '🔐 Auto-login in progress...'}
             </h3>
             <p style={{ 
               color: 'rgba(255, 255, 255, 0.6)', 
@@ -1534,30 +1533,6 @@ function Login() {
                   padding: '3px 0', 
                   color: 'rgba(255, 255, 255, 0.5)' 
                 }}>
-                  <span>🆔 Employee ID:</span>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
-                    {employeeData.employeeId}
-                  </span>
-                </div>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  fontSize: '11px', 
-                  padding: '3px 0', 
-                  color: 'rgba(255, 255, 255, 0.5)' 
-                }}>
-                  <span>👤 Name:</span>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
-                    {employeeData.name}
-                  </span>
-                </div>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  fontSize: '11px', 
-                  padding: '3px 0', 
-                  color: 'rgba(255, 255, 255, 0.5)' 
-                }}>
                   <span>📧 Email:</span>
                   <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
                     {employeeData.email}
@@ -1575,18 +1550,20 @@ function Login() {
                     {'•'.repeat(employeeData.password?.length || 8)}
                   </span>
                 </div>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  fontSize: '11px', 
-                  padding: '3px 0', 
-                  color: 'rgba(255, 255, 255, 0.5)' 
-                }}>
-                  <span>🏢 Department:</span>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
-                    {employeeData.department || 'N/A'}
-                  </span>
-                </div>
+                {employeeData.name && employeeData.name !== 'Loading...' && (
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    fontSize: '11px', 
+                    padding: '3px 0', 
+                    color: 'rgba(255, 255, 255, 0.5)' 
+                  }}>
+                    <span>👤 Name:</span>
+                    <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
+                      {employeeData.name}
+                    </span>
+                  </div>
+                )}
                 <div style={{ 
                   display: 'flex', 
                   justifyContent: 'space-between', 
@@ -1596,7 +1573,7 @@ function Login() {
                 }}>
                   <span>💼 Role:</span>
                   <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
-                    {employeeData.role || 'N/A'}
+                    {employeeData.role || 'Employee'}
                   </span>
                 </div>
               </div>
@@ -1714,71 +1691,6 @@ function Login() {
               You have been successfully logged in to{' '}
               <strong style={{ color: 'rgba(255, 255, 255, 0.9)' }}>INGRAIN'S TMS</strong>
             </p>
-            
-            {/* ─── TEST SPEECH BUTTON ─── */}
-            <button
-              onClick={testSpeech}
-              style={{
-                padding: '10px 24px',
-                background: 'rgba(99, 102, 241, 0.25)',
-                border: '1px solid rgba(99, 102, 241, 0.4)',
-                borderRadius: '25px',
-                color: '#a5b4fc',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                marginBottom: '16px',
-                transition: 'all 0.3s ease',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.4)';
-                e.currentTarget.style.transform = 'scale(1.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.25)';
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              🔊 Test Sound
-            </button>
-            
-            {/* ─── SPEAK WELCOME BUTTON ─── */}
-            <button
-              onClick={() => {
-                if (userName) {
-                  speakWelcome(userName, userRole);
-                }
-              }}
-              style={{
-                padding: '10px 24px',
-                background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.1))',
-                border: '1px solid rgba(52, 211, 153, 0.3)',
-                borderRadius: '25px',
-                color: '#6ee7b7',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                marginBottom: '16px',
-                transition: 'all 0.3s ease',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginLeft: '8px'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(52, 211, 153, 0.3)';
-                e.currentTarget.style.transform = 'scale(1.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.1))';
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              🎤 Welcome Message
-            </button>
             
             <div style={{ width: '100%' }}>
               <div style={{ 
@@ -2155,11 +2067,6 @@ function Login() {
           50% { opacity: 1; transform: scale(1.05); }
         }
         
-        @keyframes sparkle {
-          0%, 100% { opacity: 0; transform: scale(0.5); }
-          50% { opacity: 1; transform: scale(1.5); }
-        }
-        
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
@@ -2209,16 +2116,6 @@ function Login() {
         @keyframes slideIn {
           from { opacity: 0; transform: translateY(30px) scale(0.95); }
           to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        
-        @media (max-width: 480px) {
-          .login-card { padding: 30px 24px; margin: 20px; border-radius: 24px; }
-          .login-header h1 { font-size: 22px; }
-          .popup-card { padding: 25px 20px; margin: 20px; }
-          .popup-title { font-size: 16px; }
-          .popup-detail-row { font-size: 10px; }
-          .welcome-popup-glass { padding: 30px 20px 25px; margin: 20px; }
-          .welcome-title { font-size: 20px; }
         }
       `}</style>
     </div>

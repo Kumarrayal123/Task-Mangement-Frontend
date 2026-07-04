@@ -64,6 +64,7 @@ function formatDateTime(d) {
 }
 
 function getInitials(name = '') {
+  if (!name) return '?';
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
@@ -157,7 +158,6 @@ function MyTasks() {
   const [showUpcomingPopup, setShowUpcomingPopup] = useState(false);
   const [upcomingTasks, setUpcomingTasks] = useState([]);
   const [popupShown, setPopupShown] = useState(false);
-  const [voiceAlertShown, setVoiceAlertShown] = useState(false);
   
   // ─── Modals State ───
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -166,8 +166,10 @@ function MyTasks() {
     updateText: '',
     progress: 0,
     remark: '',
-    expenses: []
+    expenses: [],
+    status: ''
   });
+  const [employeeProgressData, setEmployeeProgressData] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [attachmentPreviews, setAttachmentPreviews] = useState([]);
   const [updateLoading, setUpdateLoading] = useState(false);
@@ -333,20 +335,6 @@ function MyTasks() {
         return submitDate >= today && submitDate <= sevenDaysFromNow;
       });
       
-      const todayTasks = tasksData.filter(task => {
-        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
-        const submitDate = new Date(task.submitDate);
-        submitDate.setHours(0, 0, 0, 0);
-        return submitDate.getTime() === today.getTime();
-      });
-      
-      const overdueTasks = tasksData.filter(task => {
-        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
-        const submitDate = new Date(task.submitDate);
-        submitDate.setHours(0, 0, 0, 0);
-        return submitDate < today;
-      });
-      
       if (upcoming.length > 0 && !popupShown) {
         setUpcomingTasks(upcoming);
         setShowUpcomingPopup(true);
@@ -397,6 +385,7 @@ function MyTasks() {
     navigate('/'); 
   };
 
+  // ─── Handle Update Click with Employee Progress ───
   const handleUpdateClick = (task) => {
     setSelectedTask(task);
     
@@ -406,11 +395,47 @@ function MyTasks() {
       progress = Math.round((completed / task.subtasks.length) * 100);
     }
     
+    // ─── Get employee-wise progress ───
+    const assignedEmployees = task.assignedTo || [];
+    const employeeProgress = [];
+    
+    if (assignedEmployees.length > 0) {
+      assignedEmployees.forEach(emp => {
+        const empId = emp._id || emp;
+        // Use 'name' field instead of 'fullName'
+        const empName = emp.name || emp.fullName || emp.email || 'Employee';
+        
+        const empUpdates = (task.employeeUpdates || []).filter(update => {
+          const updateEmpId = update.employeeId?._id || update.employeeId;
+          return updateEmpId?.toString() === empId?.toString();
+        });
+        
+        let latestProgress = 0;
+        let hasUpdated = false;
+        
+        if (empUpdates.length > 0) {
+          const latest = empUpdates[empUpdates.length - 1];
+          latestProgress = latest.progress || 0;
+          hasUpdated = true;
+        }
+        
+        employeeProgress.push({
+          employeeId: empId,
+          employeeName: empName,
+          progress: latestProgress,
+          hasUpdated: hasUpdated
+        });
+      });
+    }
+    
+    setEmployeeProgressData(employeeProgress);
+    
     setUpdateData({
       updateText: '',
       progress: progress,
       remark: '',
-      expenses: task.expenses || []
+      expenses: task.expenses || [],
+      status: task.status || 'Pending'
     });
     setAttachments([]);
     setAttachmentPreviews([]);
@@ -423,6 +448,29 @@ function MyTasks() {
     setExpenseError('');
     setExpensesExpanded(false);
     setShowUpdateModal(true);
+  };
+
+  // ─── Handle Status Change for Single Tasks ───
+  const handleStatusChange = (newStatus) => {
+    setUpdateData(prev => ({
+      ...prev,
+      status: newStatus
+    }));
+    
+    if (newStatus === 'Completed') {
+      setUpdateData(prev => ({
+        ...prev,
+        status: newStatus,
+        progress: 100
+      }));
+      
+      showCutePopupWithVoice(
+        '✅ Task Completed!',
+        'success',
+        `Awesome! You've completed the task! Great job! 🌟`
+      );
+      triggerConfetti();
+    }
   };
 
   // ─── Handle Attachment from Gallery ───
@@ -587,35 +635,8 @@ function MyTasks() {
     }));
   };
 
-  // ─── Check if subtask can be completed ───
-  const canCompleteSubtask = (subtask) => {
-    if (!subtask.submitDate) return true;
-    if (subtask.status === 'Completed') return true;
-    const now = new Date();
-    const submitDate = new Date(subtask.submitDate);
-    return now >= submitDate;
-  };
-
   // ─── Handle Subtask Checkbox Click ───
   const handleSubtaskCheckboxChange = (subtask, isCompleted) => {
-    if (isCompleted) {
-      if (!canCompleteSubtask(subtask)) {
-        const formattedDate = new Date(subtask.submitDate).toLocaleString('en-IN', {
-          day: '2-digit', month: 'short', year: 'numeric',
-          hour: '2-digit', minute: '2-digit'
-        });
-        
-        showCutePopupWithVoice(
-          '⏰ Wait! Not yet!',
-          'error',
-          `Sorry! You cannot complete "${subtask.name}" before ${formattedDate}. Please wait until the scheduled time.`
-        );
-        
-        showToastMessage(`⚠️ Cannot complete "${subtask.name}" before ${formattedDate}`, 'error');
-        return;
-      }
-    }
-    
     updateSubtaskStatus(subtask._id, isCompleted ? 'Completed' : 'Pending');
     
     if (isCompleted) {
@@ -628,62 +649,72 @@ function MyTasks() {
     }
   };
 
-  // ─── UPDATE SUBMIT ───
-  const handleUpdateSubmit = async (e) => {
-    e.preventDefault();
-    setUpdateLoading(true);
-    try {
-      const updatePayload = {
-        updateText: updateData.updateText,
-        progress: updateData.progress,
-        remark: updateData.remark,
-        expenses: updateData.expenses,
-        subtasks: selectedTask.subtasks
-      };
-      
-      const response = await updateTaskByEmployee(selectedTask._id, employeeId, updatePayload, attachments);
-      
-      if (response.success) {
-        setShowUpdateModal(false);
-        fetchTasks();
-        
-        triggerConfetti();
-        
-        showCutePopupWithVoice(
-          '✅ Task Updated Successfully!',
-          'success',
-          `Hey ${employeeName}! Great job! Your task "${selectedTask.taskName || selectedTask.title}" has been updated successfully! Keep up the amazing work! 🌟`
-        );
-        
-        showToastMessage('Task updated successfully!', 'success');
-      }
-    } catch (err) {
-      if (err.response?.data?.type === 'EARLY_COMPLETION_ERROR') {
-        const errorMsg = err.response?.data?.message || 'Cannot complete subtask before scheduled time';
-        
-        showCutePopupWithVoice(
-          '⚠️ ' + errorMsg,
-          'error',
-          `Sorry! ${errorMsg}. Please check the date and time, and try again!`
-        );
-        
-        showToastMessage(errorMsg, 'error');
-      } else {
-        setError('Failed to update task');
-        
-        showCutePopupWithVoice(
-          '❌ Failed to update task',
-          'error',
-          'Oops! Something went wrong while updating the task. Please try again!'
-        );
-        
-        showToastMessage('Failed to update task', 'error');
-        console.error(err);
-      }
-    } finally {
-      setUpdateLoading(false);
+ // ─── UPDATE SUBMIT ───
+const handleUpdateSubmit = async (e) => {
+  e.preventDefault();
+  setUpdateLoading(true);
+  try {
+    const updatePayload = {
+      updateText: updateData.updateText,
+      progress: updateData.progress,
+      remark: updateData.remark,
+      expenses: updateData.expenses,
+    };
+    
+    updatePayload.subtasks = selectedTask.subtasks || [];
+    
+    // ─── FIX: Only send status if task has NO subtasks AND only 1 employee assigned ───
+    const hasMultipleEmployees = selectedTask.assignedTo && selectedTask.assignedTo.length > 1;
+    const hasSubtasks = selectedTask.subtasks && selectedTask.subtasks.length > 0;
+    
+    if (!hasSubtasks && !hasMultipleEmployees) {
+      updatePayload.status = updateData.status;
     }
-  };
+    // If multiple employees, DON'T send status - let backend calculate
+    
+    const response = await updateTaskByEmployee(selectedTask._id, employeeId, updatePayload, attachments);
+    
+    if (response.success) {
+      setShowUpdateModal(false);
+      fetchTasks();
+      
+      triggerConfetti();
+      
+      showCutePopupWithVoice(
+        '✅ Task Updated Successfully!',
+        'success',
+        `Hey ${employeeName}! Great job! Your task "${selectedTask.taskName || selectedTask.title}" has been updated successfully! Keep up the amazing work! 🌟`
+      );
+      
+      showToastMessage('Task updated successfully!', 'success');
+    }
+  } catch (err) {
+    if (err.response?.data?.type === 'EARLY_COMPLETION_ERROR') {
+      const errorMsg = err.response?.data?.message || 'Cannot complete subtask before scheduled time';
+      
+      showCutePopupWithVoice(
+        '⚠️ ' + errorMsg,
+        'error',
+        `Sorry! ${errorMsg}. Please check the date and time, and try again!`
+      );
+      
+      showToastMessage(errorMsg, 'error');
+    } else {
+      setError('Failed to update task');
+      
+      showCutePopupWithVoice(
+        '❌ Failed to update task',
+        'error',
+        'Oops! Something went wrong while updating the task. Please try again!'
+      );
+      
+      showToastMessage('Failed to update task', 'error');
+      console.error(err);
+    }
+  } finally {
+    setUpdateLoading(false);
+  }
+};
 
   const handleViewTask = (task) => {
     setViewTask(task);
@@ -1191,7 +1222,6 @@ function MyTasks() {
               </div>
             ) : (
               <div className="bg-white/40 backdrop-blur-xl rounded-2xl border border-white/30 shadow-lg overflow-hidden">
-                {/* ─── TABLE WITH VERTICAL SCROLL ON MOBILE ─── */}
                 <div className="overflow-x-auto overflow-y-auto max-h-[400px] sm:max-h-none">
                   <table className="w-full min-w-[700px] sm:min-w-full">
                     <thead className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 backdrop-blur-sm sticky top-0 z-10">
@@ -1329,6 +1359,74 @@ function MyTasks() {
                   <input type="text" value={selectedTask.title || selectedTask.taskName} disabled className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none text-[10px] sm:text-sm text-gray-500 cursor-not-allowed" />
                 </div>
 
+                {/* ─── EMPLOYEE PROGRESS SECTION ─── */}
+                {selectedTask?.assignedTo && selectedTask.assignedTo.length > 1 && (
+                  <div>
+                    <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
+                      <FiUsers className="inline mr-1 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      Team Progress ({selectedTask.assignedTo.length} employees)
+                    </label>
+                    <div className="space-y-1.5 sm:space-y-2 bg-white/30 backdrop-blur-sm rounded-xl p-2 sm:p-4 border border-white/30">
+                      {employeeProgressData.map((emp, idx) => {
+                        const isCurrentEmployee = emp.employeeId?.toString() === employeeId;
+                        return (
+                          <div key={idx} className="flex items-center gap-1.5 sm:gap-3">
+                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white text-[8px] sm:text-xs font-bold flex-shrink-0 ${
+                              isCurrentEmployee ? 'bg-gradient-to-r from-indigo-500 to-purple-500' : 'bg-gray-400'
+                            }`}>
+                              {getInitials(emp.employeeName)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1 sm:gap-2">
+                                <span className={`text-[8px] sm:text-xs font-medium truncate ${
+                                  isCurrentEmployee ? 'text-indigo-700' : 'text-gray-600'
+                                }`}>
+                                  {emp.employeeName}
+                                  {isCurrentEmployee && ' (You)'}
+                                </span>
+                                <span className="text-[8px] sm:text-xs font-bold text-gray-700">{emp.progress}%</span>
+                              </div>
+                              <div className="w-full h-1.5 sm:h-2 bg-gray-200/50 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-500 ${
+                                    emp.progress >= 100 ? 'bg-emerald-500' : 
+                                    emp.progress > 0 ? 'bg-gradient-to-r from-indigo-500 to-purple-500' : 'bg-gray-300'
+                                  }`}
+                                  style={{ width: `${emp.progress}%` }}
+                                />
+                              </div>
+                              {!emp.hasUpdated && (
+                                <span className="text-[6px] sm:text-[8px] text-amber-500">⏳ Not updated yet</span>
+                              )}
+                              {emp.hasUpdated && emp.progress >= 100 && (
+                                <span className="text-[6px] sm:text-[8px] text-emerald-500">✅ Completed</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      
+                      {/* ─── Overall Progress ─── */}
+                      <div className="mt-2 pt-2 border-t border-gray-200/50">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[8px] sm:text-xs font-semibold text-gray-700">Overall Progress</span>
+                          <span className="text-[8px] sm:text-xs font-bold text-indigo-600">{updateData.progress}%</span>
+                        </div>
+                        <div className="w-full h-2 sm:h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+                            style={{ width: `${updateData.progress}%` }}
+                          />
+                        </div>
+                        <p className="text-[6px] sm:text-[8px] text-gray-400 mt-0.5">
+                          {updateData.progress >= 100 ? '✅ All employees completed!' : 
+                           `${employeeProgressData.filter(e => e.progress >= 100).length} of ${employeeProgressData.length} employees completed`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">
                     <FiMessageSquare className="inline mr-0.5 sm:mr-2 w-3 h-3 sm:w-4 sm:h-4" />
@@ -1344,6 +1442,29 @@ function MyTasks() {
                   />
                 </div>
 
+                {/* ─── STATUS DROPDOWN FOR SINGLE TASKS ─── */}
+                {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
+                  <div>
+                    <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">
+                      <FiFlag className="inline mr-0.5 sm:mr-2 w-3 h-3 sm:w-4 sm:h-4" />
+                      Status
+                    </label>
+                    <select
+                      value={updateData.status}
+                      onChange={(e) => handleStatusChange(e.target.value)}
+                      className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm"
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Completed">✅ Completed</option>
+                    </select>
+                    <p className="text-[8px] sm:text-[10px] text-gray-400 mt-0.5">
+                      {updateData.status === 'Completed' ? '🎉 Progress will be set to 100% automatically!' : 'Select status to update task progress'}
+                    </p>
+                  </div>
+                )}
+
+                {/* ─── SUBTASKS SECTION ─── */}
                 {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
                   <div>
                     <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -1429,23 +1550,29 @@ function MyTasks() {
                   </div>
                 )}
 
-                {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] sm:text-sm font-semibold text-gray-700">Progress</span>
-                      <span className="text-[10px] sm:text-sm font-bold text-gray-800">{updateData.progress}%</span>
-                    </div>
-                    <div className="w-full h-2 sm:h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
-                        style={{ width: `${updateData.progress}%` }}
-                      />
-                    </div>
+                {/* ─── PROGRESS BAR ─── */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] sm:text-sm font-semibold text-gray-700">Your Progress</span>
+                    <span className="text-[10px] sm:text-sm font-bold text-gray-800">{updateData.progress}%</span>
+                  </div>
+                  <div className="w-full h-2 sm:h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+                      style={{ width: `${updateData.progress}%` }}
+                    />
+                  </div>
+                  {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
                     <p className="text-[8px] sm:text-[10px] text-gray-500 mt-0.5">
                       {selectedTask.subtasks.filter(s => s.status === 'Completed').length} of {selectedTask.subtasks.length} subtasks completed
                     </p>
-                  </div>
-                )}
+                  )}
+                  {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
+                    <p className="text-[8px] sm:text-[10px] text-gray-500 mt-0.5">
+                      {updateData.status === 'Completed' ? '✅ Task completed!' : 'Manual progress update'}
+                    </p>
+                  )}
+                </div>
 
                 <div>
                   <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Remark</label>
@@ -1734,55 +1861,7 @@ function MyTasks() {
         </div>
       )}
 
-      {/* ─── Report Issue Modal ─── */}
-      {showReportModal && selectedTaskForReport && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
-            <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-3 sm:px-6 py-2 sm:py-4 border-b border-gray-100/50 flex justify-between items-center">
-              <h3 className="text-sm sm:text-xl font-bold bg-gradient-to-r from-rose-600 to-rose-500 bg-clip-text text-transparent flex items-center gap-1 sm:gap-2">
-                <FiAlertTriangle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-rose-500" />
-                Report Issue
-              </h3>
-              <button className="p-0.5 sm:p-1.5 hover:bg-gray-100 rounded-full transition-colors" onClick={() => setShowReportModal(false)}>
-                <FiX className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-gray-500" />
-              </button>
-            </div>
-            <form onSubmit={handleReportSubmit} className="px-3 sm:px-6 py-3 sm:py-6">
-              <div className="space-y-2 sm:space-y-4">
-                <div>
-                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Task</label>
-                  <input type="text" value={selectedTaskForReport.title || selectedTaskForReport.taskName} disabled className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none text-[10px] sm:text-sm text-gray-500 cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Issue Title *</label>
-                  <input type="text" required value={reportData.issueTitle} onChange={(e) => setReportData({...reportData, issueTitle: e.target.value})} placeholder="Brief title of the issue" className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm" />
-                </div>
-                <div>
-                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Issue Description *</label>
-                  <textarea required value={reportData.issueDescription} onChange={(e) => setReportData({...reportData, issueDescription: e.target.value})} placeholder="Describe the issue in detail..." rows="3" className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm resize-none" />
-                </div>
-                <div>
-                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Priority</label>
-                  <select value={reportData.priority} onChange={(e) => setReportData({...reportData, priority: e.target.value})} className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm">
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Critical">Critical</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex flex-col-reverse sm:flex-row justify-end gap-1.5 sm:gap-3 mt-3 sm:mt-6 pt-2 sm:pt-4 border-t border-gray-100/50">
-                <button type="button" onClick={() => setShowReportModal(false)} className="px-2 sm:px-4 py-1 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-gray-700 font-medium hover:bg-gray-200 transition-all text-[10px] sm:text-sm">Cancel</button>
-                <button type="submit" disabled={reportLoading} className="px-2 sm:px-4 py-1 sm:py-2 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-full font-semibold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 sm:gap-2 text-[10px] sm:text-sm">
-                  {reportLoading ? <><div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Submitting...</> : <><FiAlertTriangle className="w-3 h-3 sm:w-4 sm:h-4" />Report Issue</>}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ─── View Task Modal ─── */}
+      {/* ─── VIEW TASK MODAL ─── */}
       {showViewModal && viewTask && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
@@ -1796,6 +1875,7 @@ function MyTasks() {
               </button>
             </div>
             <div className="px-3 sm:px-6 py-3 sm:py-6">
+              {/* ─── Task Header ─── */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-1.5 sm:gap-0 mb-2 sm:mb-4">
                 <div className="w-full sm:w-auto">
                   <h2 className="text-sm sm:text-2xl font-bold text-gray-800">{viewTask.taskName}</h2>
@@ -1813,6 +1893,44 @@ function MyTasks() {
                 </div>
               </div>
 
+              {/* ─── Assigned Employees ─── */}
+              {viewTask.assignedTo && viewTask.assignedTo.length > 0 && (
+                <div className="mb-2 sm:mb-4">
+                  <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
+                    <FiUsers className="w-3 h-3 sm:w-4 sm:h-4" />
+                    Assigned To ({viewTask.assignedTo.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                    {viewTask.assignedTo.map((emp, idx) => {
+                      // Use 'name' field instead of 'fullName'
+                      const empName = emp.name || emp.fullName || emp.email || 'Employee';
+                      const isCurrentEmployee = emp._id?.toString() === employeeId;
+                      return (
+                        <div key={idx} className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full border ${
+                          isCurrentEmployee 
+                            ? 'bg-indigo-50/80 border-indigo-300' 
+                            : 'bg-white/50 border-gray-200'
+                        }`}>
+                          <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-white text-[8px] sm:text-xs font-bold ${
+                            isCurrentEmployee ? 'bg-gradient-to-r from-indigo-500 to-purple-500' : 'bg-gray-400'
+                          }`}>
+                            {getInitials(empName)}
+                          </div>
+                          <span className={`text-[8px] sm:text-xs font-medium ${isCurrentEmployee ? 'text-indigo-700' : 'text-gray-600'}`}>
+                            {empName}
+                            {isCurrentEmployee && ' (You)'}
+                          </span>
+                          {emp.employeeId && (
+                            <span className="text-[6px] sm:text-[10px] text-gray-400">#{emp.employeeId}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ─── Description ─── */}
               <div className="mb-2 sm:mb-4">
                 <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
                   <FiMessageSquare className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -1823,6 +1941,7 @@ function MyTasks() {
                 </p>
               </div>
 
+              {/* ─── Task Info Grid ─── */}
               <div className="grid grid-cols-2 gap-1.5 sm:gap-4 mb-2 sm:mb-4">
                 <div className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-4 border border-white/30">
                   <p className="text-[6px] sm:text-xs text-gray-500">Submit Date</p>
@@ -1845,8 +1964,34 @@ function MyTasks() {
                     <span className="text-[8px] sm:text-sm font-bold text-gray-800">{viewTask.progress || 0}%</span>
                   </div>
                 </div>
+                <div className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-4 border border-white/30">
+                  <p className="text-[6px] sm:text-xs text-gray-500">Assign Type</p>
+                  <p className="text-[10px] sm:text-sm font-semibold text-gray-800">{viewTask.assignType || 'N/A'}</p>
+                </div>
+                <div className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-4 border border-white/30">
+                  <p className="text-[6px] sm:text-xs text-gray-500">Department</p>
+                  <p className="text-[10px] sm:text-sm font-semibold text-gray-800">{viewTask.department || 'N/A'}</p>
+                </div>
               </div>
 
+              {/* ─── Frequency ─── */}
+              {viewTask.frequency && viewTask.frequency.length > 0 && (
+                <div className="mb-2 sm:mb-4">
+                  <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
+                    <FiRepeat className="w-3 h-3 sm:w-4 sm:h-4" />
+                    Frequency
+                  </h4>
+                  <div className="flex flex-wrap gap-1 sm:gap-2">
+                    {viewTask.frequency.map((freq, idx) => (
+                      <span key={idx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-indigo-50/80 rounded-full text-[8px] sm:text-xs font-medium text-indigo-700 border border-indigo-200/50">
+                        {freq}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ─── Subtasks ─── */}
               {viewTask.subtasks && viewTask.subtasks.length > 0 && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -1867,6 +2012,9 @@ function MyTasks() {
                             {subtask.submitDate && (
                               <p className="text-[6px] sm:text-[10px] text-gray-400">Submit by: {formatDate(subtask.submitDate)}</p>
                             )}
+                            {subtask.submittedDate && (
+                              <p className="text-[6px] sm:text-[10px] text-emerald-600">✅ Completed: {formatDateTime(subtask.submittedDate)}</p>
+                            )}
                           </div>
                           <span className={`px-1 sm:px-2 py-0.5 rounded-full text-[6px] sm:text-[10px] font-medium ${
                             subtask.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
@@ -1882,6 +2030,7 @@ function MyTasks() {
                 </div>
               )}
 
+              {/* ─── Employee Updates ─── */}
               {viewTask.employeeUpdates && viewTask.employeeUpdates.length > 0 && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -1889,46 +2038,57 @@ function MyTasks() {
                     Employee Updates ({viewTask.employeeUpdates.length})
                   </h4>
                   <div className="space-y-1 sm:space-y-2 max-h-24 sm:max-h-40 overflow-y-auto">
-                    {viewTask.employeeUpdates.map((update, idx) => (
-                      <div key={idx} className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-3 border border-white/30">
-                        <p className="text-[10px] sm:text-sm font-medium text-gray-800">{update.updateText}</p>
-                        <div className="flex flex-wrap items-center gap-1 sm:gap-3 mt-0.5 sm:mt-1 text-[6px] sm:text-xs text-gray-500">
-                          <span>Progress: {update.progress}%</span>
-                          {update.remark && <span>Remark: {update.remark}</span>}
-                          <span>{formatDateTime(update.updatedAt)}</span>
-                        </div>
-                        {update.attachments && update.attachments.length > 0 && (
-                          <div className="mt-1 sm:mt-2 space-y-0.5 sm:space-y-1">
-                            {update.attachments.map((att, attIdx) => (
-                              <div key={attIdx} className="flex items-center gap-1 sm:gap-2 p-0.5 sm:p-1.5 bg-white/30 rounded-lg border border-white/30 hover:bg-white/50 transition-all group">
-                                {getFileIcon(att.fileName)}
-                                <span className="text-[6px] sm:text-xs text-gray-700 truncate flex-1">{att.fileName}</span>
-                                <div className="flex items-center gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    onClick={() => handleViewAttachment(att.fileUrl, att.fileName)}
-                                    className="p-0.5 sm:p-1 hover:bg-indigo-50 rounded-full transition-colors"
-                                    title="View"
-                                  >
-                                    <FiEye className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-indigo-600" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDownloadAttachment(att.fileUrl, att.fileName)}
-                                    className="p-0.5 sm:p-1 hover:bg-emerald-50 rounded-full transition-colors"
-                                    title="Download"
-                                  >
-                                    <FiDownload className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-emerald-600" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
+                    {viewTask.employeeUpdates.map((update, idx) => {
+                      // Use 'name' field instead of 'fullName'
+                      const empName = update.employeeId?.name || update.employeeId?.fullName || 'Employee';
+                      return (
+                        <div key={idx} className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-3 border border-white/30">
+                          <div className="flex items-center gap-1 sm:gap-2">
+                            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-400 flex items-center justify-center text-white text-[8px] sm:text-xs font-bold">
+                              {getInitials(empName)}
+                            </div>
+                            <span className="text-[8px] sm:text-xs font-medium text-gray-600">{empName}</span>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <p className="text-[10px] sm:text-sm font-medium text-gray-800 mt-0.5">{update.updateText}</p>
+                          <div className="flex flex-wrap items-center gap-1 sm:gap-3 mt-0.5 sm:mt-1 text-[6px] sm:text-xs text-gray-500">
+                            <span>Progress: {update.progress}%</span>
+                            {update.remark && <span>Remark: {update.remark}</span>}
+                            <span>{formatDateTime(update.updatedAt)}</span>
+                          </div>
+                          {update.attachments && update.attachments.length > 0 && (
+                            <div className="mt-1 sm:mt-2 space-y-0.5 sm:space-y-1">
+                              {update.attachments.map((att, attIdx) => (
+                                <div key={attIdx} className="flex items-center gap-1 sm:gap-2 p-0.5 sm:p-1.5 bg-white/30 rounded-lg border border-white/30 hover:bg-white/50 transition-all group">
+                                  {getFileIcon(att.fileName)}
+                                  <span className="text-[6px] sm:text-xs text-gray-700 truncate flex-1">{att.fileName}</span>
+                                  <div className="flex items-center gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => handleViewAttachment(att.fileUrl, att.fileName)}
+                                      className="p-0.5 sm:p-1 hover:bg-indigo-50 rounded-full transition-colors"
+                                      title="View"
+                                    >
+                                      <FiEye className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-indigo-600" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDownloadAttachment(att.fileUrl, att.fileName)}
+                                      className="p-0.5 sm:p-1 hover:bg-emerald-50 rounded-full transition-colors"
+                                      title="Download"
+                                    >
+                                      <FiDownload className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-emerald-600" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
+              {/* ─── Expenses ─── */}
               {viewTask.expenses && viewTask.expenses.length > 0 && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -1976,6 +2136,9 @@ function MyTasks() {
                                   {exp.approvalStatus}
                                 </span>
                               )}
+                              {exp.addedBy?.name && (
+                                <span>by {exp.addedBy.name}</span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1994,6 +2157,7 @@ function MyTasks() {
                 </div>
               )}
 
+              {/* ─── Attachments ─── */}
               {viewTask.attachments && viewTask.attachments.length > 0 && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -2027,6 +2191,7 @@ function MyTasks() {
                 </div>
               )}
 
+              {/* ─── Remark ─── */}
               {viewTask.remark && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
@@ -2039,6 +2204,7 @@ function MyTasks() {
                 </div>
               )}
 
+              {/* ─── Voice Note ─── */}
               {viewTask.voiceNote && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
@@ -2049,6 +2215,29 @@ function MyTasks() {
                 </div>
               )}
 
+              {/* ─── Created By ─── */}
+              {viewTask.createdBy && (
+                <div className="mb-2 sm:mb-4">
+                  <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
+                    <FiUser className="w-3 h-3 sm:w-4 sm:h-4" />
+                    Created By
+                  </h4>
+                  <div className="flex items-center gap-1.5 sm:gap-3 bg-white/40 backdrop-blur-sm rounded-xl p-2 sm:p-4 border border-white/30">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white text-[10px] sm:text-sm font-bold">
+                      {getInitials(viewTask.createdBy.name || viewTask.createdBy.fullName)}
+                    </div>
+                    <div>
+                      <p className="text-[10px] sm:text-sm font-semibold text-gray-800">{viewTask.createdBy.name || viewTask.createdBy.fullName}</p>
+                      <p className="text-[8px] sm:text-xs text-gray-500">{viewTask.createdBy.email}</p>
+                      {viewTask.createdBy.employeeId && (
+                        <p className="text-[6px] sm:text-[10px] text-gray-400">ID: {viewTask.createdBy.employeeId}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── Footer Buttons ─── */}
               <div className="flex flex-col-reverse sm:flex-row justify-end gap-1.5 sm:gap-3 mt-3 sm:mt-6 pt-2 sm:pt-4 border-t border-gray-100/50">
                 <button onClick={() => { setShowViewModal(false); setViewTask(null); }} className="px-2 sm:px-4 py-1 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-gray-700 font-medium hover:bg-gray-200 transition-all text-[10px] sm:text-sm">
                   Close
@@ -2059,6 +2248,54 @@ function MyTasks() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Report Issue Modal ─── */}
+      {showReportModal && selectedTaskForReport && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
+            <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-3 sm:px-6 py-2 sm:py-4 border-b border-gray-100/50 flex justify-between items-center">
+              <h3 className="text-sm sm:text-xl font-bold bg-gradient-to-r from-rose-600 to-rose-500 bg-clip-text text-transparent flex items-center gap-1 sm:gap-2">
+                <FiAlertTriangle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-rose-500" />
+                Report Issue
+              </h3>
+              <button className="p-0.5 sm:p-1.5 hover:bg-gray-100 rounded-full transition-colors" onClick={() => setShowReportModal(false)}>
+                <FiX className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleReportSubmit} className="px-3 sm:px-6 py-3 sm:py-6">
+              <div className="space-y-2 sm:space-y-4">
+                <div>
+                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Task</label>
+                  <input type="text" value={selectedTaskForReport.title || selectedTaskForReport.taskName} disabled className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none text-[10px] sm:text-sm text-gray-500 cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Issue Title *</label>
+                  <input type="text" required value={reportData.issueTitle} onChange={(e) => setReportData({...reportData, issueTitle: e.target.value})} placeholder="Brief title of the issue" className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm" />
+                </div>
+                <div>
+                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Issue Description *</label>
+                  <textarea required value={reportData.issueDescription} onChange={(e) => setReportData({...reportData, issueDescription: e.target.value})} placeholder="Describe the issue in detail..." rows="3" className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm resize-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Priority</label>
+                  <select value={reportData.priority} onChange={(e) => setReportData({...reportData, priority: e.target.value})} className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm">
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-1.5 sm:gap-3 mt-3 sm:mt-6 pt-2 sm:pt-4 border-t border-gray-100/50">
+                <button type="button" onClick={() => setShowReportModal(false)} className="px-2 sm:px-4 py-1 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-gray-700 font-medium hover:bg-gray-200 transition-all text-[10px] sm:text-sm">Cancel</button>
+                <button type="submit" disabled={reportLoading} className="px-2 sm:px-4 py-1 sm:py-2 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-full font-semibold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 sm:gap-2 text-[10px] sm:text-sm">
+                  {reportLoading ? <><div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Submitting...</> : <><FiAlertTriangle className="w-3 h-3 sm:w-4 sm:h-4" />Report Issue</>}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

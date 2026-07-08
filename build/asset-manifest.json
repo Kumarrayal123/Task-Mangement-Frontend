@@ -1,14 +1,14 @@
 {
   "files": {
-    "main.css": "/static/css/main.c1e2eb02.css",
-    "main.js": "/static/js/main.fd2df39a.js",
+    "main.css": "/static/css/main.0c49651d.css",
+    "main.js": "/static/js/main.ab40daf1.js",
     "static/media/iglogo.png": "/static/media/iglogo.15b66a7ec365b1bd7765.png",
     "index.html": "/index.html",
-    "main.c1e2eb02.css.map": "/static/css/main.c1e2eb02.css.map",
-    "main.fd2df39a.js.map": "/static/js/main.fd2df39a.js.map"
+    "main.0c49651d.css.map": "/static/css/main.0c49651d.css.map",
+    "main.ab40daf1.js.map": "/static/js/main.ab40daf1.js.map"
   },
   "entrypoints": [
-    "static/css/main.c1e2eb02.css",
-    "static/js/main.fd2df39a.js"
+    "static/css/main.0c49651d.css",
+    "static/js/main.ab40daf1.js"
   ]
 }

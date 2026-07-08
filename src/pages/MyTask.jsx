@@ -330,6 +330,7 @@ function MyTasks() {
       
       const upcoming = tasksData.filter(task => {
         if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
+        if (task.progress >= 100) return false;
         const submitDate = new Date(task.submitDate);
         submitDate.setHours(0, 0, 0, 0);
         return submitDate >= today && submitDate <= sevenDaysFromNow;
@@ -390,10 +391,6 @@ function MyTasks() {
     setSelectedTask(task);
     
     let progress = task.progress || 0;
-    if (task.subtasks && task.subtasks.length > 0) {
-      const completed = task.subtasks.filter(s => s.status === 'Completed').length;
-      progress = Math.round((completed / task.subtasks.length) * 100);
-    }
     
     // ─── Get employee-wise progress ───
     const assignedEmployees = task.assignedTo || [];
@@ -402,21 +399,25 @@ function MyTasks() {
     if (assignedEmployees.length > 0) {
       assignedEmployees.forEach(emp => {
         const empId = emp._id || emp;
-        // Use 'name' field instead of 'fullName'
         const empName = emp.name || emp.fullName || emp.email || 'Employee';
-        
-        const empUpdates = (task.employeeUpdates || []).filter(update => {
-          const updateEmpId = update.employeeId?._id || update.employeeId;
-          return updateEmpId?.toString() === empId?.toString();
-        });
         
         let latestProgress = 0;
         let hasUpdated = false;
         
-        if (empUpdates.length > 0) {
-          const latest = empUpdates[empUpdates.length - 1];
-          latestProgress = latest.progress || 0;
+        if (task.employeeSubtaskProgress && task.employeeSubtaskProgress[empId]) {
+          latestProgress = task.employeeSubtaskProgress[empId].progress || 0;
           hasUpdated = true;
+        } else {
+          const empUpdates = (task.employeeUpdates || []).filter(update => {
+            const updateEmpId = update.employeeId?._id || update.employeeId;
+            return updateEmpId?.toString() === empId?.toString();
+          });
+          
+          if (empUpdates.length > 0) {
+            const latest = empUpdates[empUpdates.length - 1];
+            latestProgress = latest.progress || 0;
+            hasUpdated = true;
+          }
         }
         
         employeeProgress.push({
@@ -430,12 +431,23 @@ function MyTasks() {
     
     setEmployeeProgressData(employeeProgress);
     
+    if (employeeProgress.length > 0) {
+      const total = employeeProgress.reduce((sum, emp) => sum + emp.progress, 0);
+      progress = Math.round(total / employeeProgress.length);
+    }
+    
+    // ─── FIX: If progress is 100%, set status to Completed ───
+    let status = task.status || 'Pending';
+    if (progress >= 100) {
+      status = 'Completed';
+    }
+    
     setUpdateData({
       updateText: '',
       progress: progress,
       remark: '',
       expenses: task.expenses || [],
-      status: task.status || 'Pending'
+      status: status
     });
     setAttachments([]);
     setAttachmentPreviews([]);
@@ -621,18 +633,10 @@ function MyTasks() {
       return subtask;
     });
     
-    const completed = updatedSubtasks.filter(s => s.status === 'Completed').length;
-    const progress = updatedSubtasks.length > 0 ? Math.round((completed / updatedSubtasks.length) * 100) : 0;
-    
     setSelectedTask({
       ...selectedTask,
       subtasks: updatedSubtasks
     });
-    
-    setUpdateData(prev => ({
-      ...prev,
-      progress: progress
-    }));
   };
 
   // ─── Handle Subtask Checkbox Click ───
@@ -649,72 +653,89 @@ function MyTasks() {
     }
   };
 
- // ─── UPDATE SUBMIT ───
-const handleUpdateSubmit = async (e) => {
-  e.preventDefault();
-  setUpdateLoading(true);
-  try {
-    const updatePayload = {
-      updateText: updateData.updateText,
-      progress: updateData.progress,
-      remark: updateData.remark,
-      expenses: updateData.expenses,
-    };
+  // ─── Calculate progress from subtasks ───
+  const calculateProgressFromSubtasks = (subtasks) => {
+    if (!subtasks || subtasks.length === 0) return 0;
+    const completed = subtasks.filter(s => s.status === 'Completed').length;
+    return Math.round((completed / subtasks.length) * 100);
+  };
+
+  // ─── UPDATE SUBMIT ───
+  const handleUpdateSubmit = async (e) => {
+    e.preventDefault();
+    setUpdateLoading(true);
     
-    updatePayload.subtasks = selectedTask.subtasks || [];
-    
-    // ─── FIX: Only send status if task has NO subtasks AND only 1 employee assigned ───
-    const hasMultipleEmployees = selectedTask.assignedTo && selectedTask.assignedTo.length > 1;
-    const hasSubtasks = selectedTask.subtasks && selectedTask.subtasks.length > 0;
-    
-    if (!hasSubtasks && !hasMultipleEmployees) {
-      updatePayload.status = updateData.status;
+    try {
+      let subtasksToSend = selectedTask.subtasks || [];
+      
+      // ─── Calculate progress from subtasks ───
+      let calculatedProgress = updateData.progress;
+      
+      if (subtasksToSend.length > 0) {
+        calculatedProgress = calculateProgressFromSubtasks(subtasksToSend);
+      }
+      
+      const hasMultipleEmployees = selectedTask.assignedTo && selectedTask.assignedTo.length > 1;
+      const hasSubtasks = selectedTask.subtasks && selectedTask.subtasks.length > 0;
+      
+      // ─── FIX: If progress is 100%, set status to Completed ───
+      let finalStatus = updateData.status;
+      if (calculatedProgress >= 100) {
+        finalStatus = 'Completed';
+      }
+      
+      const updatePayload = {
+        updateText: updateData.updateText,
+        progress: calculatedProgress,
+        remark: updateData.remark,
+        expenses: updateData.expenses,
+        subtasks: subtasksToSend,
+        status: finalStatus
+      };
+      
+      const response = await updateTaskByEmployee(selectedTask._id, employeeId, updatePayload, attachments);
+      
+      if (response.success) {
+        setShowUpdateModal(false);
+        fetchTasks();
+        
+        triggerConfetti();
+        
+        showCutePopupWithVoice(
+          '✅ Task Updated Successfully!',
+          'success',
+          `Hey ${employeeName}! Great job! Your task "${selectedTask.taskName || selectedTask.title}" has been updated successfully! Keep up the amazing work! 🌟`
+        );
+        
+        showToastMessage('Task updated successfully!', 'success');
+      }
+    } catch (err) {
+      if (err.response?.data?.type === 'EARLY_COMPLETION_ERROR') {
+        const errorMsg = err.response?.data?.message || 'Cannot complete subtask before scheduled time';
+        
+        showCutePopupWithVoice(
+          '⚠️ ' + errorMsg,
+          'error',
+          `Sorry! ${errorMsg}. Please check the date and time, and try again!`
+        );
+        
+        showToastMessage(errorMsg, 'error');
+      } else {
+        setError('Failed to update task');
+        
+        showCutePopupWithVoice(
+          '❌ Failed to update task',
+          'error',
+          'Oops! Something went wrong while updating the task. Please try again!'
+        );
+        
+        showToastMessage('Failed to update task', 'error');
+        console.error(err);
+      }
+    } finally {
+      setUpdateLoading(false);
     }
-    // If multiple employees, DON'T send status - let backend calculate
-    
-    const response = await updateTaskByEmployee(selectedTask._id, employeeId, updatePayload, attachments);
-    
-    if (response.success) {
-      setShowUpdateModal(false);
-      fetchTasks();
-      
-      triggerConfetti();
-      
-      showCutePopupWithVoice(
-        '✅ Task Updated Successfully!',
-        'success',
-        `Hey ${employeeName}! Great job! Your task "${selectedTask.taskName || selectedTask.title}" has been updated successfully! Keep up the amazing work! 🌟`
-      );
-      
-      showToastMessage('Task updated successfully!', 'success');
-    }
-  } catch (err) {
-    if (err.response?.data?.type === 'EARLY_COMPLETION_ERROR') {
-      const errorMsg = err.response?.data?.message || 'Cannot complete subtask before scheduled time';
-      
-      showCutePopupWithVoice(
-        '⚠️ ' + errorMsg,
-        'error',
-        `Sorry! ${errorMsg}. Please check the date and time, and try again!`
-      );
-      
-      showToastMessage(errorMsg, 'error');
-    } else {
-      setError('Failed to update task');
-      
-      showCutePopupWithVoice(
-        '❌ Failed to update task',
-        'error',
-        'Oops! Something went wrong while updating the task. Please try again!'
-      );
-      
-      showToastMessage('Failed to update task', 'error');
-      console.error(err);
-    }
-  } finally {
-    setUpdateLoading(false);
-  }
-};
+  };
 
   const handleViewTask = (task) => {
     setViewTask(task);
@@ -836,8 +857,14 @@ const handleUpdateSubmit = async (e) => {
       filtered = filtered.filter(t => t.assignType === 'SELF');
     }
     
+    // ─── FIX: Filter status with progress 100% as Completed ───
     if (filterStatus !== 'ALL') {
-      filtered = filtered.filter((t) => t.status === filterStatus);
+      filtered = filtered.filter((t) => {
+        if (filterStatus === 'Completed') {
+          return t.progress >= 100 || t.status === 'Completed';
+        }
+        return t.status === filterStatus && t.progress < 100;
+      });
     }
     
     if (filterPriority !== 'ALL') {
@@ -851,21 +878,21 @@ const handleUpdateSubmit = async (e) => {
     
     if (filterDue === 'TODAY') {
       filtered = filtered.filter(task => {
-        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
+        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
         const submitDate = new Date(task.submitDate);
         submitDate.setHours(0, 0, 0, 0);
         return submitDate.getTime() === today.getTime();
       });
     } else if (filterDue === 'UPCOMING') {
       filtered = filtered.filter(task => {
-        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
+        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
         const submitDate = new Date(task.submitDate);
         submitDate.setHours(0, 0, 0, 0);
         return submitDate >= today && submitDate <= sevenDaysFromNow && submitDate.getTime() !== today.getTime();
       });
     } else if (filterDue === 'OVERDUE') {
       filtered = filtered.filter(task => {
-        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
+        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
         const submitDate = new Date(task.submitDate);
         submitDate.setHours(0, 0, 0, 0);
         return submitDate < today;
@@ -887,12 +914,13 @@ const handleUpdateSubmit = async (e) => {
 
   const totalTasks = tasks.length;
   
+  // ─── FIX: Count tasks with progress 100% as Completed ───
   const counts = {
     ALL: tasks.length,
-    Pending: tasks.filter((t) => t.status === 'Pending').length,
-    'In Progress': tasks.filter((t) => t.status === 'In Progress').length,
-    Completed: tasks.filter((t) => t.status === 'Completed').length,
-    Overdue: tasks.filter((t) => t.status === 'Overdue').length,
+    Pending: tasks.filter((t) => t.status === 'Pending' && t.progress < 100).length,
+    'In Progress': tasks.filter((t) => t.status === 'In Progress' && t.progress < 100).length,
+    Completed: tasks.filter((t) => t.progress >= 100 || t.status === 'Completed').length,
+    Overdue: tasks.filter((t) => t.status === 'Overdue' && t.progress < 100).length,
     Rejected: tasks.filter((t) => t.status === 'Rejected').length,
   };
 
@@ -915,22 +943,23 @@ const handleUpdateSubmit = async (e) => {
   const sevenDaysFromNow = new Date(today);
   sevenDaysFromNow.setDate(today.getDate() + 7);
 
+  // ─── FIX: Due counts with progress 100% excluded ───
   const dueCounts = {
     ALL: tasks.length,
     TODAY: tasks.filter(task => {
-      if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
+      if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
       const submitDate = new Date(task.submitDate);
       submitDate.setHours(0, 0, 0, 0);
       return submitDate.getTime() === today.getTime();
     }).length,
     UPCOMING: tasks.filter(task => {
-      if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
+      if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
       const submitDate = new Date(task.submitDate);
       submitDate.setHours(0, 0, 0, 0);
       return submitDate >= today && submitDate <= sevenDaysFromNow && submitDate.getTime() !== today.getTime();
     }).length,
     OVERDUE: tasks.filter(task => {
-      if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
+      if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
       const submitDate = new Date(task.submitDate);
       submitDate.setHours(0, 0, 0, 0);
       return submitDate < today;
@@ -944,6 +973,13 @@ const handleUpdateSubmit = async (e) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
+  };
+
+  // ─── Get subtask progress for UI ───
+  const getSubtaskProgress = (subtasks) => {
+    if (!subtasks || subtasks.length === 0) return 0;
+    const completed = subtasks.filter(s => s.status === 'Completed').length;
+    return Math.round((completed / subtasks.length) * 100);
   };
 
   return (
@@ -1238,27 +1274,44 @@ const handleUpdateSubmit = async (e) => {
                     </thead>
                     <tbody className="divide-y divide-gray-200/50">
                       {filteredTasks.map((t, index) => {
-                        const st = statusMeta[t.status] || statusMeta['Pending'];
+                        // ─── FIX: If progress is 100%, treat as Completed ───
+                        const isCompleted = t.progress >= 100;
+                        const effectiveStatus = isCompleted ? 'Completed' : t.status;
+                        const st = statusMeta[effectiveStatus] || statusMeta['Pending'];
                         const pr = priorityMeta[t.priority] || priorityMeta['Medium'];
                         const issueCount = t.reportedIssues?.length || 0;
                         
-                        const isOverdue = t.submitDate && new Date(t.submitDate) < new Date() && t.status !== 'Completed' && t.status !== 'Rejected';
+                        // ─── FIX: Only show Overdue if NOT completed ───
+                        const isOverdue = t.submitDate && 
+                                          new Date(t.submitDate) < new Date() && 
+                                          !isCompleted &&
+                                          t.status !== 'Rejected' &&
+                                          t.progress < 100;
+                        
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
                         const isToday = t.submitDate && new Date(t.submitDate).setHours(0,0,0,0) === today.getTime();
                         
                         return (
-                          <tr key={t._id} className={`hover:bg-white/30 transition-all duration-200 ${index % 2 === 0 ? 'bg-white/20' : 'bg-white/10'} ${isOverdue ? 'border-l-4 border-l-rose-500' : ''} ${isToday && !isOverdue ? 'border-l-4 border-l-purple-500' : ''}`}>
+                          <tr key={t._id} className={`hover:bg-white/30 transition-all duration-200 ${index % 2 === 0 ? 'bg-white/20' : 'bg-white/10'} ${isOverdue ? 'border-l-4 border-l-rose-500' : ''} ${isToday && !isOverdue && !isCompleted ? 'border-l-4 border-l-purple-500' : ''} ${isCompleted ? 'border-l-4 border-l-emerald-500' : ''}`}>
                             <td className="px-2 sm:px-6 py-2 sm:py-4">
                               <div className="text-[8px] sm:text-sm font-semibold text-gray-800 truncate max-w-[60px] sm:max-w-[150px]">{t.taskName}</div>
+                              
+                              {isCompleted && (
+                                <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-emerald-600 font-medium">
+                                  <FiCheckCircle className="w-2 h-2 sm:w-3 sm:h-3" />
+                                  ✓ Completed
+                                </span>
+                              )}
+                              
                               {isOverdue && (
-                                <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-rose-600 font-medium">
+                                <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-rose-600 font-medium ml-0.5 sm:ml-1">
                                   <FiAlertCircle className="w-2 h-2 sm:w-3 sm:h-3" />
                                   Overdue!
                                 </span>
                               )}
-                              {isToday && !isOverdue && (
-                                <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-purple-600 font-medium">
+                              {isToday && !isOverdue && !isCompleted && (
+                                <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-purple-600 font-medium ml-0.5 sm:ml-1">
                                   <FiCalendar className="w-2 h-2 sm:w-3 sm:h-3" />
                                   Due Today!
                                 </span>
@@ -1276,7 +1329,7 @@ const handleUpdateSubmit = async (e) => {
                             <td className="px-2 sm:px-6 py-2 sm:py-4">
                               <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[6px] sm:text-xs font-semibold ${st.bg} ${st.text} border ${st.border}`}>
                                 {st.icon}
-                                <span className="hidden xs:inline">{t.status}</span>
+                                <span className="hidden xs:inline">{effectiveStatus}</span>
                               </span>
                             </td>
                             <td className="px-2 sm:px-6 py-2 sm:py-4 text-center">
@@ -1296,10 +1349,14 @@ const handleUpdateSubmit = async (e) => {
                               <div className="flex items-center gap-0.5 sm:gap-2">
                                 <div className="flex-1 min-w-[20px] sm:min-w-[60px]">
                                   <div className="w-full h-1 sm:h-2 bg-gray-200/50 rounded-full overflow-hidden">
-                                    <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500" style={{ width: `${t.progress || 0}%` }} />
+                                    <div className={`h-full rounded-full transition-all duration-500 ${
+                                      t.progress >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-indigo-500 to-purple-500'
+                                    }`} style={{ width: `${t.progress || 0}%` }} />
                                   </div>
                                 </div>
-                                <span className="text-[6px] sm:text-xs font-medium text-gray-600">{t.progress || 0}%</span>
+                                <span className={`text-[6px] sm:text-xs font-medium ${t.progress >= 100 ? 'text-emerald-600' : 'text-gray-600'}`}>
+                                  {t.progress || 0}%
+                                </span>
                               </div>
                             </td>
                             <td className="px-2 sm:px-6 py-2 sm:py-4">
@@ -1312,15 +1369,17 @@ const handleUpdateSubmit = async (e) => {
                                 <button onClick={() => handleViewTask(t)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-indigo-50 transition-all group" title="View Task">
                                   <FiEye className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
                                 </button>
-                                <button onClick={() => handleUpdateClick(t)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-amber-50 transition-all group" title="Update Task">
-                                  <FiEdit2 className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
-                                </button>
+                                {!isCompleted && (
+                                  <button onClick={() => handleUpdateClick(t)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-amber-50 transition-all group" title="Update Task">
+                                    <FiEdit2 className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
+                                  </button>
+                                )}
                                 {t.assignType === 'SELF' && (
                                   <button onClick={() => handleDeleteTask(t._id)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-all group" title="Delete Task">
                                     <FiTrash2 className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
                                   </button>
                                 )}
-                                {t.assignType !== 'SELF' && (
+                                {t.assignType !== 'SELF' && !isCompleted && (
                                   <button onClick={() => handleReportIssueClick(t)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-all group" title="Report Issue">
                                     <FiAlertTriangle className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
                                   </button>
@@ -1410,17 +1469,30 @@ const handleUpdateSubmit = async (e) => {
                       <div className="mt-2 pt-2 border-t border-gray-200/50">
                         <div className="flex items-center justify-between">
                           <span className="text-[8px] sm:text-xs font-semibold text-gray-700">Overall Progress</span>
-                          <span className="text-[8px] sm:text-xs font-bold text-indigo-600">{updateData.progress}%</span>
+                          <span className="text-[8px] sm:text-xs font-bold text-indigo-600">
+                            {selectedTask.subtasks && selectedTask.subtasks.length > 0 
+                              ? `${getSubtaskProgress(selectedTask.subtasks)}%`
+                              : `${updateData.progress}%`
+                            }
+                          </span>
                         </div>
                         <div className="w-full h-2 sm:h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
-                            style={{ width: `${updateData.progress}%` }}
+                            style={{ 
+                              width: `${selectedTask.subtasks && selectedTask.subtasks.length > 0 
+                                ? getSubtaskProgress(selectedTask.subtasks)
+                                : updateData.progress}%` 
+                            }}
                           />
                         </div>
                         <p className="text-[6px] sm:text-[8px] text-gray-400 mt-0.5">
-                          {updateData.progress >= 100 ? '✅ All employees completed!' : 
-                           `${employeeProgressData.filter(e => e.progress >= 100).length} of ${employeeProgressData.length} employees completed`}
+                          {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
+                            `${selectedTask.subtasks.filter(s => s.status === 'Completed').length} of ${selectedTask.subtasks.length} employees completed`
+                          ) : (
+                            updateData.progress >= 100 ? '✅ All employees completed!' : 
+                            `${employeeProgressData.filter(e => e.progress >= 100).length} of ${employeeProgressData.length} employees completed`
+                          )}
                         </p>
                       </div>
                     </div>
@@ -1443,7 +1515,7 @@ const handleUpdateSubmit = async (e) => {
                 </div>
 
                 {/* ─── STATUS DROPDOWN FOR SINGLE TASKS ─── */}
-                {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
+                {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && selectedTask?.assignedTo?.length === 1 && (
                   <div>
                     <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">
                       <FiFlag className="inline mr-0.5 sm:mr-2 w-3 h-3 sm:w-4 sm:h-4" />
@@ -1474,7 +1546,7 @@ const handleUpdateSubmit = async (e) => {
                         {selectedTask.subtasks.filter(s => s.status === 'Completed').length} completed
                       </span>
                       <span className="text-[8px] sm:text-[10px] text-emerald-600 font-medium ml-1">
-                        • Progress: {updateData.progress}%
+                        • Progress: {getSubtaskProgress(selectedTask.subtasks)}%
                       </span>
                     </label>
                     <div className="space-y-2 sm:space-y-3 max-h-40 sm:max-h-56 overflow-y-auto pr-1">
@@ -1554,12 +1626,21 @@ const handleUpdateSubmit = async (e) => {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] sm:text-sm font-semibold text-gray-700">Your Progress</span>
-                    <span className="text-[10px] sm:text-sm font-bold text-gray-800">{updateData.progress}%</span>
+                    <span className="text-[10px] sm:text-sm font-bold text-gray-800">
+                      {selectedTask.subtasks && selectedTask.subtasks.length > 0 
+                        ? `${getSubtaskProgress(selectedTask.subtasks)}%`
+                        : `${updateData.progress}%`
+                      }
+                    </span>
                   </div>
                   <div className="w-full h-2 sm:h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
-                      style={{ width: `${updateData.progress}%` }}
+                      style={{ 
+                        width: `${selectedTask.subtasks && selectedTask.subtasks.length > 0 
+                          ? getSubtaskProgress(selectedTask.subtasks)
+                          : updateData.progress}%` 
+                      }}
                     />
                   </div>
                   {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
@@ -1902,7 +1983,6 @@ const handleUpdateSubmit = async (e) => {
                   </h4>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {viewTask.assignedTo.map((emp, idx) => {
-                      // Use 'name' field instead of 'fullName'
                       const empName = emp.name || emp.fullName || emp.email || 'Employee';
                       const isCurrentEmployee = emp._id?.toString() === employeeId;
                       return (
@@ -2039,7 +2119,6 @@ const handleUpdateSubmit = async (e) => {
                   </h4>
                   <div className="space-y-1 sm:space-y-2 max-h-24 sm:max-h-40 overflow-y-auto">
                     {viewTask.employeeUpdates.map((update, idx) => {
-                      // Use 'name' field instead of 'fullName'
                       const empName = update.employeeId?.name || update.employeeId?.fullName || 'Employee';
                       return (
                         <div key={idx} className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-3 border border-white/30">

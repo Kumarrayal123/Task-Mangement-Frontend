@@ -64,6 +64,7 @@ function formatDateTime(d) {
 }
 
 function getInitials(name = '') {
+  if (!name) return '?';
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
@@ -161,8 +162,10 @@ function MyTodayTasks() {
     updateText: '',
     progress: 0,
     remark: '',
-    expenses: []
+    expenses: [],
+    status: 'Pending'
   });
+  const [employeeProgressData, setEmployeeProgressData] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [attachmentPreviews, setAttachmentPreviews] = useState([]);
   const [updateLoading, setUpdateLoading] = useState(false);
@@ -300,7 +303,6 @@ function MyTodayTasks() {
       setName(name);
       setEmpId(id);
       
-      // Set today's date
       const today = new Date();
       setTodayDate(today.toLocaleDateString('en-IN', {
         weekday: 'long',
@@ -320,10 +322,12 @@ function MyTodayTasks() {
     setLoading(true);
     setError('');
     try {
+      console.log("📌 Fetching today's tasks for employee:", employeeId);
       const res = await axios.get(`${TASK_API}/mytodaystasks/${employeeId}`);
       const data = res.data;
       
       if (data.success) {
+        console.log("📌 Today's tasks fetched:", data.tasks?.length || 0);
         setTasks(data.tasks || []);
         setStats(data.stats || {});
       } else {
@@ -373,20 +377,72 @@ function MyTodayTasks() {
     navigate('/'); 
   };
 
+  // ─── Handle Update Click with Employee Progress ───
   const handleUpdateClick = (task) => {
+    console.log("📌 handleUpdateClick called for task:", task.taskName);
     setSelectedTask(task);
     
     let progress = task.progress || 0;
-    if (task.subtasks && task.subtasks.length > 0) {
-      const completed = task.subtasks.filter(s => s.status === 'Completed').length;
-      progress = Math.round((completed / task.subtasks.length) * 100);
+    let status = task.status || 'Pending';
+    
+    // If progress is 100%, set status to Completed
+    if (progress >= 100) {
+      status = 'Completed';
+    }
+    
+    // ─── Get employee-wise progress ───
+    const assignedEmployees = task.assignedTo || [];
+    const employeeProgress = [];
+    
+    if (assignedEmployees.length > 0) {
+      assignedEmployees.forEach(emp => {
+        const empId = emp._id || emp;
+        const empName = emp.name || emp.fullName || emp.email || 'Employee';
+        
+        let latestProgress = 0;
+        let hasUpdated = false;
+        
+        if (task.employeeSubtaskProgress && task.employeeSubtaskProgress[empId]) {
+          latestProgress = task.employeeSubtaskProgress[empId].progress || 0;
+          hasUpdated = true;
+        } else {
+          const empUpdates = (task.employeeUpdates || []).filter(update => {
+            const updateEmpId = update.employeeId?._id || update.employeeId;
+            return updateEmpId?.toString() === empId?.toString();
+          });
+          
+          if (empUpdates.length > 0) {
+            const latest = empUpdates[empUpdates.length - 1];
+            latestProgress = latest.progress || 0;
+            hasUpdated = true;
+          }
+        }
+        
+        employeeProgress.push({
+          employeeId: empId,
+          employeeName: empName,
+          progress: latestProgress,
+          hasUpdated: hasUpdated
+        });
+      });
+    }
+    
+    setEmployeeProgressData(employeeProgress);
+    
+    if (employeeProgress.length > 0) {
+      const total = employeeProgress.reduce((sum, emp) => sum + emp.progress, 0);
+      progress = Math.round(total / employeeProgress.length);
+      if (progress >= 100) {
+        status = 'Completed';
+      }
     }
     
     setUpdateData({
       updateText: '',
       progress: progress,
       remark: '',
-      expenses: task.expenses || []
+      expenses: task.expenses || [],
+      status: status
     });
     setAttachments([]);
     setAttachmentPreviews([]);
@@ -549,18 +605,10 @@ function MyTodayTasks() {
       return subtask;
     });
     
-    const completed = updatedSubtasks.filter(s => s.status === 'Completed').length;
-    const progress = updatedSubtasks.length > 0 ? Math.round((completed / updatedSubtasks.length) * 100) : 0;
-    
     setSelectedTask({
       ...selectedTask,
       subtasks: updatedSubtasks
     });
-    
-    setUpdateData(prev => ({
-      ...prev,
-      progress: progress
-    }));
   };
 
   // ─── Check if subtask can be completed ───
@@ -604,17 +652,48 @@ function MyTodayTasks() {
     }
   };
 
+  // ─── Calculate progress from subtasks ───
+  const calculateProgressFromSubtasks = (subtasks) => {
+    if (!subtasks || subtasks.length === 0) return 0;
+    const completed = subtasks.filter(s => s.status === 'Completed').length;
+    return Math.round((completed / subtasks.length) * 100);
+  };
+
+  // ─── Get subtask progress for UI ───
+  const getSubtaskProgress = (subtasks) => {
+    if (!subtasks || subtasks.length === 0) return 0;
+    const completed = subtasks.filter(s => s.status === 'Completed').length;
+    return Math.round((completed / subtasks.length) * 100);
+  };
+
   // ─── UPDATE SUBMIT ───
   const handleUpdateSubmit = async (e) => {
     e.preventDefault();
     setUpdateLoading(true);
+    
     try {
+      let subtasksToSend = selectedTask.subtasks || [];
+      
+      // ─── Calculate progress from subtasks ───
+      let calculatedProgress = updateData.progress;
+      
+      if (subtasksToSend.length > 0) {
+        calculatedProgress = calculateProgressFromSubtasks(subtasksToSend);
+      }
+      
+      // If progress is 100%, set status to Completed
+      let finalStatus = updateData.status;
+      if (calculatedProgress >= 100) {
+        finalStatus = 'Completed';
+      }
+      
       const updatePayload = {
         updateText: updateData.updateText,
-        progress: updateData.progress,
+        progress: calculatedProgress,
+        status: finalStatus,
         remark: updateData.remark,
         expenses: updateData.expenses,
-        subtasks: selectedTask.subtasks
+        subtasks: subtasksToSend
       };
       
       const response = await updateTaskByEmployee(selectedTask._id, employeeId, updatePayload, attachments);
@@ -771,6 +850,34 @@ function MyTodayTasks() {
     return <FiFile className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />;
   };
 
+  // ─── Get time difference display ───
+  const getTimeDifferenceDisplay = (date) => {
+    if (!date) return null;
+    const now = new Date();
+    const checkDate = new Date(date);
+    const diffMs = checkDate - now;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffMs < 0) {
+      const lateHours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+      const lateMinutes = Math.floor((Math.abs(diffMs) % (1000 * 60 * 60)) / (1000 * 60));
+      return {
+        type: 'late',
+        text: `Late by ${lateHours}h ${lateMinutes}m`
+      };
+    } else if (diffMs > 0) {
+      return {
+        type: 'early',
+        text: `${diffHours}h ${diffMinutes}m remaining`
+      };
+    }
+    return {
+      type: 'on-time',
+      text: 'Due now!'
+    };
+  };
+
   // ─── Filter Tasks ───
   const getFilteredTasks = () => {
     let filtered = [...tasks];
@@ -782,7 +889,13 @@ function MyTodayTasks() {
     }
     
     if (filterStatus !== 'ALL') {
-      filtered = filtered.filter((t) => t.status === filterStatus);
+      filtered = filtered.filter((t) => {
+        // If filtering by Completed, include tasks with progress 100%
+        if (filterStatus === 'Completed') {
+          return t.progress >= 100 || t.status === 'Completed';
+        }
+        return t.status === filterStatus;
+      });
     }
     
     if (filterPriority !== 'ALL') {
@@ -804,12 +917,13 @@ function MyTodayTasks() {
 
   const totalTasks = tasks.length;
   
+  // ─── FIX: Count tasks with progress 100% as Completed ───
   const counts = {
     ALL: tasks.length,
-    Pending: tasks.filter((t) => t.status === 'Pending').length,
-    'In Progress': tasks.filter((t) => t.status === 'In Progress').length,
-    Completed: tasks.filter((t) => t.status === 'Completed').length,
-    Overdue: tasks.filter((t) => t.status === 'Overdue').length,
+    Pending: tasks.filter((t) => t.status === 'Pending' && t.progress < 100).length,
+    'In Progress': tasks.filter((t) => t.status === 'In Progress' && t.progress < 100).length,
+    Completed: tasks.filter((t) => t.progress >= 100 || t.status === 'Completed').length,
+    Overdue: tasks.filter((t) => t.status === 'Overdue' && t.progress < 100).length,
     Rejected: tasks.filter((t) => t.status === 'Rejected').length,
   };
 
@@ -857,7 +971,6 @@ function MyTodayTasks() {
               </div>
             </div>
             <div className="flex items-center gap-1 sm:gap-2 md:gap-3 flex-wrap">
-              {/* Date/Time Capsule */}
               <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 bg-white/40 backdrop-blur-xl rounded-xl border border-white/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                 <div className="flex items-center gap-1.5">
                   <FiCalendar className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-500" />
@@ -902,32 +1015,7 @@ function MyTodayTasks() {
               <StatCard label="Daily Tasks" value={stats.dailyTasks || 0} icon={<FiRepeat className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-purple-400 to-purple-500 shadow-purple-500/30" />
             </div>
 
-            {/* ─── Simple Header ─── */}
-            <div className="bg-white/40 backdrop-blur-xl rounded-2xl p-3 sm:p-5 border border-white/30 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm sm:text-xl font-bold text-gray-800">
-                    📋 Today's Tasks
-                  </h2>
-                  <p className="text-[10px] sm:text-sm text-gray-600 mt-0.5">
-                    {todayDate} • {tasks.length} task{tasks.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 bg-white/40 backdrop-blur-sm rounded-full border border-white/30">
-                    <FiCalendar className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-500" />
-                    <span className="text-[8px] sm:text-xs text-gray-600">
-                      {new Date().toLocaleTimeString('en-IN', { 
-                        hour: '2-digit', 
-                        minute: '2-digit',
-                        hour12: true 
-                      })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
+          
             {/* ─── Filters ─── */}
             <div className="flex flex-wrap gap-2 sm:gap-3">
               <div className="relative">
@@ -1045,37 +1133,66 @@ function MyTodayTasks() {
                     </thead>
                     <tbody className="divide-y divide-gray-200/50">
                       {filteredTasks.map((t, index) => {
-                        const st = statusMeta[t.status] || statusMeta['Pending'];
+                        // ─── FIX: Determine effective status based on progress ───
+                        const isCompleted = t.progress >= 100;
+                        const effectiveStatus = isCompleted ? 'Completed' : t.status;
+                        const st = statusMeta[effectiveStatus] || statusMeta['Pending'];
                         const pr = priorityMeta[t.priority] || priorityMeta['Medium'];
                         const issueCount = t.reportedIssues?.length || 0;
                         
-                        const isOverdue = t.submitDate && new Date(t.submitDate) < new Date() && t.status !== 'Completed' && t.status !== 'Rejected';
+                        // ─── FIX: Only show Overdue if NOT completed ───
+                        const isOverdue = t.submitDate && 
+                                          new Date(t.submitDate) < new Date() && 
+                                          !isCompleted &&
+                                          effectiveStatus !== 'Rejected' &&
+                                          t.progress < 100;
+                        
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
                         const isToday = t.submitDate && new Date(t.submitDate).setHours(0,0,0,0) === today.getTime();
                         
                         const isDaily = t.frequency && t.frequency.includes('Daily');
+                        const timeDiff = t.submitDate ? getTimeDifferenceDisplay(t.submitDate) : null;
                         
                         return (
-                          <tr key={t._id} className={`hover:bg-white/30 transition-all duration-200 ${index % 2 === 0 ? 'bg-white/20' : 'bg-white/10'} ${isOverdue ? 'border-l-4 border-l-rose-500' : ''} ${isToday && !isOverdue ? 'border-l-4 border-l-purple-500' : ''} ${isDaily ? 'border-r-4 border-r-amber-400' : ''}`}>
+                          <tr key={t._id} className={`hover:bg-white/30 transition-all duration-200 ${index % 2 === 0 ? 'bg-white/20' : 'bg-white/10'} ${isOverdue ? 'border-l-4 border-l-rose-500' : ''} ${isToday && !isOverdue && !isCompleted ? 'border-l-4 border-l-purple-500' : ''} ${isCompleted ? 'border-l-4 border-l-emerald-500' : ''} ${isDaily ? 'border-r-4 border-r-amber-400' : ''}`}>
                             <td className="px-2 sm:px-6 py-2 sm:py-4">
                               <div className="text-[8px] sm:text-sm font-semibold text-gray-800 truncate max-w-[60px] sm:max-w-[150px]">{t.taskName}</div>
-                              {isDaily && (
+                              
+                              {/* ─── Show Completed badge first ─── */}
+                              {isCompleted && (
+                                <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-emerald-600 font-medium">
+                                  <FiCheckCircle className="w-2 h-2 sm:w-3 sm:h-3" />
+                                  ✓ Completed
+                                </span>
+                              )}
+                              
+                              {isDaily && !isCompleted && (
                                 <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-amber-600 font-medium">
                                   <FiRepeat className="w-2 h-2 sm:w-3 sm:h-3" />
                                   Daily
                                 </span>
                               )}
+                              
+                              {/* ─── Only show Overdue if NOT completed ─── */}
                               {isOverdue && (
                                 <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-rose-600 font-medium ml-0.5 sm:ml-1">
                                   <FiAlertCircle className="w-2 h-2 sm:w-3 sm:h-3" />
                                   Overdue!
                                 </span>
                               )}
-                              {isToday && !isOverdue && (
+                              
+                              {isToday && !isOverdue && !isCompleted && (
                                 <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-purple-600 font-medium ml-0.5 sm:ml-1">
                                   <FiCalendar className="w-2 h-2 sm:w-3 sm:h-3" />
                                   Due Today!
+                                </span>
+                              )}
+                              
+                              {timeDiff && timeDiff.type === 'early' && !isCompleted && (
+                                <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-emerald-600 font-medium ml-0.5 sm:ml-1">
+                                  <FiClock className="w-2 h-2 sm:w-3 sm:h-3" />
+                                  {timeDiff.text}
                                 </span>
                               )}
                             </td>
@@ -1091,7 +1208,7 @@ function MyTodayTasks() {
                             <td className="px-2 sm:px-6 py-2 sm:py-4">
                               <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[6px] sm:text-xs font-semibold ${st.bg} ${st.text} border ${st.border}`}>
                                 {st.icon}
-                                <span className="hidden xs:inline">{t.status}</span>
+                                <span className="hidden xs:inline">{effectiveStatus}</span>
                               </span>
                             </td>
                             <td className="px-2 sm:px-6 py-2 sm:py-4 text-center">
@@ -1111,10 +1228,14 @@ function MyTodayTasks() {
                               <div className="flex items-center gap-0.5 sm:gap-2">
                                 <div className="flex-1 min-w-[20px] sm:min-w-[60px]">
                                   <div className="w-full h-1 sm:h-2 bg-gray-200/50 rounded-full overflow-hidden">
-                                    <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500" style={{ width: `${t.progress || 0}%` }} />
+                                    <div className={`h-full rounded-full transition-all duration-500 ${
+                                      t.progress >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-indigo-500 to-purple-500'
+                                    }`} style={{ width: `${t.progress || 0}%` }} />
                                   </div>
                                 </div>
-                                <span className="text-[6px] sm:text-xs font-medium text-gray-600">{t.progress || 0}%</span>
+                                <span className={`text-[6px] sm:text-xs font-medium ${t.progress >= 100 ? 'text-emerald-600' : 'text-gray-600'}`}>
+                                  {t.progress || 0}%
+                                </span>
                               </div>
                             </td>
                             <td className="px-2 sm:px-6 py-2 sm:py-4">
@@ -1127,15 +1248,17 @@ function MyTodayTasks() {
                                 <button onClick={() => handleViewTask(t)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-indigo-50 transition-all group" title="View Task">
                                   <FiEye className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
                                 </button>
-                                <button onClick={() => handleUpdateClick(t)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-amber-50 transition-all group" title="Update Task">
-                                  <FiEdit2 className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
-                                </button>
+                                {!isCompleted && (
+                                  <button onClick={() => handleUpdateClick(t)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-amber-50 transition-all group" title="Update Task">
+                                    <FiEdit2 className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
+                                  </button>
+                                )}
                                 {t.assignType === 'SELF' && (
                                   <button onClick={() => handleDeleteTask(t._id)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-all group" title="Delete Task">
                                     <FiTrash2 className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
                                   </button>
                                 )}
-                                {t.assignType !== 'SELF' && (
+                                {t.assignType !== 'SELF' && !isCompleted && (
                                   <button onClick={() => handleReportIssueClick(t)} className="p-0.5 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-rose-50 transition-all group" title="Report Issue">
                                     <FiAlertTriangle className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
                                   </button>
@@ -1174,6 +1297,79 @@ function MyTodayTasks() {
                   <input type="text" value={selectedTask.title || selectedTask.taskName} disabled className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none text-[10px] sm:text-sm text-gray-500 cursor-not-allowed" />
                 </div>
 
+                {/* ─── EMPLOYEE PROGRESS SECTION ─── */}
+                {selectedTask?.assignedTo && selectedTask.assignedTo.length > 1 && (
+                  <div>
+                    <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
+                      <FiUsers className="inline mr-1 sm:mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      Team Progress ({selectedTask.assignedTo.length} employees)
+                    </label>
+                    <div className="space-y-1.5 sm:space-y-2 bg-white/30 backdrop-blur-sm rounded-xl p-2 sm:p-4 border border-white/30">
+                      {employeeProgressData.map((emp, idx) => {
+                        const isCurrentEmployee = emp.employeeId?.toString() === employeeId;
+                        return (
+                          <div key={idx} className="flex items-center gap-1.5 sm:gap-3">
+                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white text-[8px] sm:text-xs font-bold flex-shrink-0 ${
+                              isCurrentEmployee ? 'bg-gradient-to-r from-indigo-500 to-purple-500' : 'bg-gray-400'
+                            }`}>
+                              {getInitials(emp.employeeName)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1 sm:gap-2">
+                                <span className={`text-[8px] sm:text-xs font-medium truncate ${
+                                  isCurrentEmployee ? 'text-indigo-700' : 'text-gray-600'
+                                }`}>
+                                  {emp.employeeName}
+                                  {isCurrentEmployee && ' (You)'}
+                                </span>
+                                <span className="text-[8px] sm:text-xs font-bold text-gray-700">{emp.progress}%</span>
+                              </div>
+                              <div className="w-full h-1.5 sm:h-2 bg-gray-200/50 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-500 ${
+                                    emp.progress >= 100 ? 'bg-emerald-500' : 
+                                    emp.progress > 0 ? 'bg-gradient-to-r from-indigo-500 to-purple-500' : 'bg-gray-300'
+                                  }`}
+                                  style={{ width: `${emp.progress}%` }}
+                                />
+                              </div>
+                              {!emp.hasUpdated && (
+                                <span className="text-[6px] sm:text-[8px] text-amber-500">⏳ Not updated yet</span>
+                              )}
+                              {emp.hasUpdated && emp.progress >= 100 && (
+                                <span className="text-[6px] sm:text-[8px] text-emerald-500">✅ Completed</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      
+                      {/* ─── Overall Progress ─── */}
+                      <div className="mt-2 pt-2 border-t border-gray-200/50">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[8px] sm:text-xs font-semibold text-gray-700">Overall Progress</span>
+                          <span className="text-[8px] sm:text-xs font-bold text-indigo-600">
+                            {selectedTask.subtasks && selectedTask.subtasks.length > 0 
+                              ? `${getSubtaskProgress(selectedTask.subtasks)}%`
+                              : `${updateData.progress}%`
+                            }
+                          </span>
+                        </div>
+                        <div className="w-full h-2 sm:h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+                            style={{ 
+                              width: `${selectedTask.subtasks && selectedTask.subtasks.length > 0 
+                                ? getSubtaskProgress(selectedTask.subtasks)
+                                : updateData.progress}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">
                     <FiMessageSquare className="inline mr-0.5 sm:mr-2 w-3 h-3 sm:w-4 sm:h-4" />
@@ -1189,6 +1385,47 @@ function MyTodayTasks() {
                   />
                 </div>
 
+                {/* ─── STATUS DROPDOWN ─── */}
+                {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && selectedTask?.assignedTo?.length === 1 && (
+                  <div>
+                    <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">
+                      <FiFlag className="inline mr-0.5 sm:mr-2 w-3 h-3 sm:w-4 sm:h-4" />
+                      Status
+                    </label>
+                    <select
+                      value={updateData.status || 'Pending'}
+                      onChange={(e) => {
+                        setUpdateData(prev => ({
+                          ...prev,
+                          status: e.target.value
+                        }));
+                        if (e.target.value === 'Completed') {
+                          setUpdateData(prev => ({
+                            ...prev,
+                            status: 'Completed',
+                            progress: 100
+                          }));
+                          showCutePopupWithVoice(
+                            '✅ Task Completed!',
+                            'success',
+                            `Awesome! You've completed the task! Great job! 🌟`
+                          );
+                          triggerConfetti();
+                        }
+                      }}
+                      className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm"
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Completed">✅ Completed</option>
+                    </select>
+                    <p className="text-[8px] sm:text-[10px] text-gray-400 mt-0.5">
+                      {updateData.status === 'Completed' ? '🎉 Progress will be set to 100% automatically!' : 'Select status to update task progress'}
+                    </p>
+                  </div>
+                )}
+
+                {/* ─── SUBTASKS SECTION ─── */}
                 {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
                   <div>
                     <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -1198,7 +1435,7 @@ function MyTodayTasks() {
                         {selectedTask.subtasks.filter(s => s.status === 'Completed').length} completed
                       </span>
                       <span className="text-[8px] sm:text-[10px] text-emerald-600 font-medium ml-1">
-                        • Progress: {updateData.progress}%
+                        • Progress: {getSubtaskProgress(selectedTask.subtasks)}%
                       </span>
                     </label>
                     <div className="space-y-2 sm:space-y-3 max-h-40 sm:max-h-56 overflow-y-auto pr-1">
@@ -1274,23 +1511,38 @@ function MyTodayTasks() {
                   </div>
                 )}
 
-                {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] sm:text-sm font-semibold text-gray-700">Progress</span>
-                      <span className="text-[10px] sm:text-sm font-bold text-gray-800">{updateData.progress}%</span>
-                    </div>
-                    <div className="w-full h-2 sm:h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
-                        style={{ width: `${updateData.progress}%` }}
-                      />
-                    </div>
+                {/* ─── PROGRESS BAR ─── */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] sm:text-sm font-semibold text-gray-700">Your Progress</span>
+                    <span className="text-[10px] sm:text-sm font-bold text-gray-800">
+                      {selectedTask.subtasks && selectedTask.subtasks.length > 0 
+                        ? `${getSubtaskProgress(selectedTask.subtasks)}%`
+                        : `${updateData.progress}%`
+                      }
+                    </span>
+                  </div>
+                  <div className="w-full h-2 sm:h-2.5 bg-gray-200/50 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+                      style={{ 
+                        width: `${selectedTask.subtasks && selectedTask.subtasks.length > 0 
+                          ? getSubtaskProgress(selectedTask.subtasks)
+                          : updateData.progress}%` 
+                      }}
+                    />
+                  </div>
+                  {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
                     <p className="text-[8px] sm:text-[10px] text-gray-500 mt-0.5">
                       {selectedTask.subtasks.filter(s => s.status === 'Completed').length} of {selectedTask.subtasks.length} subtasks completed
                     </p>
-                  </div>
-                )}
+                  )}
+                  {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
+                    <p className="text-[8px] sm:text-[10px] text-gray-500 mt-0.5">
+                      {updateData.status === 'Completed' ? '✅ Task completed!' : 'Manual progress update'}
+                    </p>
+                  )}
+                </div>
 
                 <div>
                   <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Remark</label>
@@ -1579,55 +1831,7 @@ function MyTodayTasks() {
         </div>
       )}
 
-      {/* ─── Report Issue Modal ─── */}
-      {showReportModal && selectedTaskForReport && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
-            <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-3 sm:px-6 py-2 sm:py-4 border-b border-gray-100/50 flex justify-between items-center">
-              <h3 className="text-sm sm:text-xl font-bold bg-gradient-to-r from-rose-600 to-rose-500 bg-clip-text text-transparent flex items-center gap-1 sm:gap-2">
-                <FiAlertTriangle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-rose-500" />
-                Report Issue
-              </h3>
-              <button className="p-0.5 sm:p-1.5 hover:bg-gray-100 rounded-full transition-colors" onClick={() => setShowReportModal(false)}>
-                <FiX className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-gray-500" />
-              </button>
-            </div>
-            <form onSubmit={handleReportSubmit} className="px-3 sm:px-6 py-3 sm:py-6">
-              <div className="space-y-2 sm:space-y-4">
-                <div>
-                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Task</label>
-                  <input type="text" value={selectedTaskForReport.title || selectedTaskForReport.taskName} disabled className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none text-[10px] sm:text-sm text-gray-500 cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Issue Title *</label>
-                  <input type="text" required value={reportData.issueTitle} onChange={(e) => setReportData({...reportData, issueTitle: e.target.value})} placeholder="Brief title of the issue" className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm" />
-                </div>
-                <div>
-                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Issue Description *</label>
-                  <textarea required value={reportData.issueDescription} onChange={(e) => setReportData({...reportData, issueDescription: e.target.value})} placeholder="Describe the issue in detail..." rows="3" className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm resize-none" />
-                </div>
-                <div>
-                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Priority</label>
-                  <select value={reportData.priority} onChange={(e) => setReportData({...reportData, priority: e.target.value})} className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm">
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Critical">Critical</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex flex-col-reverse sm:flex-row justify-end gap-1.5 sm:gap-3 mt-3 sm:mt-6 pt-2 sm:pt-4 border-t border-gray-100/50">
-                <button type="button" onClick={() => setShowReportModal(false)} className="px-2 sm:px-4 py-1 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-gray-700 font-medium hover:bg-gray-200 transition-all text-[10px] sm:text-sm">Cancel</button>
-                <button type="submit" disabled={reportLoading} className="px-2 sm:px-4 py-1 sm:py-2 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-full font-semibold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 sm:gap-2 text-[10px] sm:text-sm">
-                  {reportLoading ? <><div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Submitting...</> : <><FiAlertTriangle className="w-3 h-3 sm:w-4 sm:h-4" />Report Issue</>}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ─── View Task Modal ─── */}
+      {/* ─── VIEW TASK MODAL ─── */}
       {showViewModal && viewTask && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
@@ -1864,49 +2068,49 @@ function MyTodayTasks() {
                 </div>
               )}
 
-             {viewTask.voiceNote && (
-  <div className="mb-2 sm:mb-4">
-    <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
-      <FiMic className="w-3 h-3 sm:w-4 sm:h-4" />
-      Voice Note
-    </h4>
-    <div className="bg-white/30 backdrop-blur-sm rounded-lg p-2 sm:p-3 border border-white/30">
-      <audio 
-        controls 
-        src={`${BASE_URL}/${viewTask.voiceNote}`}
-        className="w-full"
-        onError={(e) => {
-          console.error('Audio error:', e);
-          const parent = e.target.parentElement;
-          const fileName = viewTask.voiceNote.split('/').pop();
-          parent.innerHTML = `
-            <div class="text-xs text-amber-600 flex flex-col items-center gap-2 p-3 bg-amber-50/50 rounded-lg">
-              <div class="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8" x2="12" y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <span class="font-medium">Unable to load voice note</span>
-              </div>
-              <p class="text-[10px] text-gray-500">File: ${fileName}</p>
-              <div class="flex gap-2 mt-1">
-                <button onclick="window.open('${BASE_URL}/${viewTask.voiceNote}', '_blank')" 
-                  class="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs hover:bg-indigo-200 transition-colors">
-                  Open in New Tab
-                </button>
-                <button onclick="window.location.href='${BASE_URL}/${viewTask.voiceNote}'" 
-                  class="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs hover:bg-emerald-200 transition-colors">
-                  Download
-                </button>
-              </div>
-            </div>
-          `;
-        }}
-      />
-    </div>
-  </div>
-)}
+              {viewTask.voiceNote && (
+                <div className="mb-2 sm:mb-4">
+                  <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
+                    <FiMic className="w-3 h-3 sm:w-4 sm:h-4" />
+                    Voice Note
+                  </h4>
+                  <div className="bg-white/30 backdrop-blur-sm rounded-lg p-2 sm:p-3 border border-white/30">
+                    <audio 
+                      controls 
+                      src={`${BASE_URL}/${viewTask.voiceNote}`}
+                      className="w-full"
+                      onError={(e) => {
+                        console.error('Audio error:', e);
+                        const parent = e.target.parentElement;
+                        const fileName = viewTask.voiceNote.split('/').pop();
+                        parent.innerHTML = `
+                          <div class="text-xs text-amber-600 flex flex-col items-center gap-2 p-3 bg-amber-50/50 rounded-lg">
+                            <div class="flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                              </svg>
+                              <span class="font-medium">Unable to load voice note</span>
+                            </div>
+                            <p class="text-[10px] text-gray-500">File: ${fileName}</p>
+                            <div class="flex gap-2 mt-1">
+                              <button onclick="window.open('${BASE_URL}/${viewTask.voiceNote}', '_blank')" 
+                                class="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs hover:bg-indigo-200 transition-colors">
+                                Open in New Tab
+                              </button>
+                              <button onclick="window.location.href='${BASE_URL}/${viewTask.voiceNote}'" 
+                                class="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs hover:bg-emerald-200 transition-colors">
+                                Download
+                              </button>
+                            </div>
+                          </div>
+                        `;
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col-reverse sm:flex-row justify-end gap-1.5 sm:gap-3 mt-3 sm:mt-6 pt-2 sm:pt-4 border-t border-gray-100/50">
                 <button onClick={() => { setShowViewModal(false); setViewTask(null); }} className="px-2 sm:px-4 py-1 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-gray-700 font-medium hover:bg-gray-200 transition-all text-[10px] sm:text-sm">
@@ -1918,6 +2122,54 @@ function MyTodayTasks() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Report Issue Modal ─── */}
+      {showReportModal && selectedTaskForReport && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
+            <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-3 sm:px-6 py-2 sm:py-4 border-b border-gray-100/50 flex justify-between items-center">
+              <h3 className="text-sm sm:text-xl font-bold bg-gradient-to-r from-rose-600 to-rose-500 bg-clip-text text-transparent flex items-center gap-1 sm:gap-2">
+                <FiAlertTriangle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-rose-500" />
+                Report Issue
+              </h3>
+              <button className="p-0.5 sm:p-1.5 hover:bg-gray-100 rounded-full transition-colors" onClick={() => setShowReportModal(false)}>
+                <FiX className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleReportSubmit} className="px-3 sm:px-6 py-3 sm:py-6">
+              <div className="space-y-2 sm:space-y-4">
+                <div>
+                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Task</label>
+                  <input type="text" value={selectedTaskForReport.title || selectedTaskForReport.taskName} disabled className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none text-[10px] sm:text-sm text-gray-500 cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Issue Title *</label>
+                  <input type="text" required value={reportData.issueTitle} onChange={(e) => setReportData({...reportData, issueTitle: e.target.value})} placeholder="Brief title of the issue" className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm" />
+                </div>
+                <div>
+                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Issue Description *</label>
+                  <textarea required value={reportData.issueDescription} onChange={(e) => setReportData({...reportData, issueDescription: e.target.value})} placeholder="Describe the issue in detail..." rows="3" className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm resize-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">Priority</label>
+                  <select value={reportData.priority} onChange={(e) => setReportData({...reportData, priority: e.target.value})} className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm">
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-1.5 sm:gap-3 mt-3 sm:mt-6 pt-2 sm:pt-4 border-t border-gray-100/50">
+                <button type="button" onClick={() => setShowReportModal(false)} className="px-2 sm:px-4 py-1 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-gray-700 font-medium hover:bg-gray-200 transition-all text-[10px] sm:text-sm">Cancel</button>
+                <button type="submit" disabled={reportLoading} className="px-2 sm:px-4 py-1 sm:py-2 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-full font-semibold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 sm:gap-2 text-[10px] sm:text-sm">
+                  {reportLoading ? <><div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Submitting...</> : <><FiAlertTriangle className="w-3 h-3 sm:w-4 sm:h-4" />Report Issue</>}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

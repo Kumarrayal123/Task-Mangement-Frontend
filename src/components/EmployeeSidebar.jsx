@@ -688,7 +688,7 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
         )}
       </aside>
 
-      <style jsx>{`
+      <style>{`
         /* Safe area for notched phones */
         .safe-area-bottom {
           padding-bottom: env(safe-area-inset-bottom, 0px);

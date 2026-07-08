@@ -14,6 +14,9 @@ import Notifications from './pages/Notifications';
 import MyNotifications from './pages/MyNotifications';
 import MyProfile from './pages/MyProfile';
 import CreateTask from './pages/CreateTask';
+import AdminPendingTask from './pages/AdminPendingTask';
+import AdminProgressTask from './pages/AdminProgressTask';
+import AdminCompletedTask from './pages/AdminCompletedTask';
 function App() {
   return (
     <Router>
@@ -31,6 +34,9 @@ function App() {
            <Route path="/my-notifications" element={<MyNotifications />} />
           <Route path="/employee-profile" element={<MyProfile />} />
           <Route path="/issues" element={<Issues />} />
+          <Route path="/admin-pending-task" element={<AdminPendingTask />} />
+          <Route path="/admin-progress-task" element={<AdminProgressTask />} />
+          <Route path="/admin-completed-task" element={<AdminCompletedTask />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

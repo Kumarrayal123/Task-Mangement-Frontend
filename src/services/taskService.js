@@ -254,3 +254,12 @@ export const deleteReportedIssue = async (taskId, issueId) => {
   );
   return response.data;
 };
+
+// ─── Forward Task ───
+export const forwardTask = async (taskId, forwardData) => {
+  const response = await axios.post(
+    `${API_BASE_URL}/forward-task/${taskId}`,
+    forwardData
+  );
+  return response.data;
+};

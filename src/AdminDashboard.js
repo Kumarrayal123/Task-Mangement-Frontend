@@ -333,7 +333,7 @@ function AdminDashboard() {
               </div>
 
               <div 
-                onClick={() => navigateTo('/task')}
+                onClick={() => navigateTo('/admin-pending-task')}
                 className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-2.5 sm:p-3 md:p-4 lg:p-5 border border-white/30 shadow-lg hover:shadow-xl transition-all hover:scale-105 cursor-pointer group"
               >
                 <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
@@ -348,7 +348,7 @@ function AdminDashboard() {
               </div>
 
               <div 
-                onClick={() => navigateTo('/task')}
+                onClick={() => navigateTo('/admin-progress-task')}
                 className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-2.5 sm:p-3 md:p-4 lg:p-5 border border-white/30 shadow-lg hover:shadow-xl transition-all hover:scale-105 cursor-pointer group"
               >
                 <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
@@ -363,7 +363,7 @@ function AdminDashboard() {
               </div>
 
               <div 
-                onClick={() => navigateTo('/task')}
+                onClick={() => navigateTo('/admin-completed-task')}
                 className="col-span-2 sm:col-span-1 bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-2.5 sm:p-3 md:p-4 lg:p-5 border border-white/30 shadow-lg hover:shadow-xl transition-all hover:scale-105 cursor-pointer group"
               >
                 <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">

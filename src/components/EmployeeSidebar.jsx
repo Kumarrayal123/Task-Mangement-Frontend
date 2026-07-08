@@ -16,9 +16,13 @@ import {
   FiMenu,
   FiX,
   FiSettings,
-  FiUser as FiUserIcon
+  FiUser as FiUserIcon,
+  FiSun
 } from 'react-icons/fi';
 import { FaTasks } from 'react-icons/fa';
+
+// ─── IMPORT LOGO ───
+import logo from '../images/iglogo.png'; // Adjust path as per your project structure
 
 function getInitials(name = '') {
   return name
@@ -44,6 +48,7 @@ const BOTTOM_NAV_ITEMS = [
     isParent: true,
     children: [
       { id: 'my-tasks', label: 'My Tasks', path: '/my-task', icon: <FiList className="w-4 h-4" /> },
+      { id: 'today-tasks', label: "Today's Tasks", path: '/my-today-tasks', icon: <FiSun className="w-4 h-4" /> },
       { id: 'create-task', label: 'Create Task', path: '/create-task', icon: <FiPlus className="w-4 h-4" /> },
     ]
   },
@@ -86,6 +91,7 @@ const NAV_ITEMS = [
     isParent: true,
     children: [
       { id: 'my-tasks', label: 'My Tasks', path: '/my-task', icon: <FiList className="w-4 h-4" /> },
+      { id: 'today-tasks', label: "Today's Tasks", path: '/my-today-tasks', icon: <FiSun className="w-4 h-4" /> },
       { id: 'create-task', label: 'Create Task', path: '/create-task', icon: <FiPlus className="w-4 h-4" /> },
     ]
   },
@@ -177,12 +183,14 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
 
   const checkIsActive = (path) => {
     if (path === '/my-task' && location.pathname === '/my-task') return true;
+    if (path === '/my-today-tasks' && location.pathname === '/my-today-tasks') return true;
     if (path === '/create-task' && location.pathname === '/create-task') return true;
     return location.pathname === path;
   };
 
   const isBottomNavActive = (path) => {
     if (path === '/my-task' && location.pathname === '/my-task') return true;
+    if (path === '/my-today-tasks' && location.pathname === '/my-today-tasks') return true;
     if (path === '/create-task' && location.pathname === '/create-task') return true;
     if (path === '/my-issues' && location.pathname === '/my-issues') return true;
     if (path === '/my-notifications' && location.pathname === '/my-notifications') return true;
@@ -271,7 +279,7 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
                       />
                       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 
                         bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-indigo-500/30 
-                        border border-white/30 p-1.5 min-w-[150px] animate-slideUp">
+                        border border-white/30 p-1.5 min-w-[160px] animate-slideUp">
                         <div className="space-y-0.5">
                           {item.children.map((child) => {
                             const childIsActive = checkIsActive(child.path);
@@ -457,7 +465,7 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
           ${collapsed ? 'w-20' : 'w-[280px]'}
         `}
       >
-        {/* Logo */}
+        {/* Logo with Image */}
         <div className={`
           flex items-center gap-3 px-4 py-5
           border-b border-white/20
@@ -465,10 +473,12 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
           relative
         `}>
           <div className={`flex items-center gap-3 ${collapsed ? 'justify-center w-full' : ''}`}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 
-              flex items-center justify-center shadow-lg shadow-indigo-500/30 transition-all hover:scale-105">
-              <FiZap className="text-white w-5 h-5" />
-            </div>
+            {/* ─── LOGO IMAGE ─── */}
+            <img 
+              src={logo} 
+              alt="TaskFlow Logo" 
+              className={`${collapsed ? 'w-10 h-10' : 'w-12 h-12'} object-contain rounded-xl shadow-lg shadow-indigo-500/20 transition-all hover:scale-105`}
+            />
             {!collapsed && (
               <span className="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 
                 bg-clip-text text-transparent">
@@ -547,7 +557,7 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
                     )}
                   </button>
 
-                  {/* Child Items - My Tasks and Create Task */}
+                  {/* Child Items - My Tasks, Today's Tasks and Create Task */}
                   {!collapsed && isExpanded && (
                     <div className="ml-4 pl-3 space-y-1 border-l-2 border-indigo-200/30">
                       {item.children.map((child) => {

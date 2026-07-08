@@ -10,7 +10,7 @@ import {
   FiChevronDown, FiChevronUp, FiLoader, FiDownload, FiFile,
   FiImage, FiFileText, FiExternalLink, FiUsers, FiUserPlus,
   FiLayers, FiCalendar, FiBell, FiFilter, FiCamera, FiFolder,
-  FiRepeat
+  FiRepeat, FiSun, FiCloud
 } from 'react-icons/fi';
 import { FaTasks, FaRocket, FaList } from 'react-icons/fa';
 import EmployeeSidebar from '../components/EmployeeSidebar';
@@ -29,7 +29,7 @@ const BASE_URL = 'https://api.timelyhealth.in';
 const priorityMeta = {
   Critical: { color: '#ef4444', bg: 'bg-rose-50/80', text: 'text-rose-600', border: 'border-rose-200/50', icon: <FiAlertCircle className="w-3 h-3 sm:w-4 sm:h-4" /> },
   High:     { color: '#f97316', bg: 'bg-orange-50/80', text: 'text-orange-600', border: 'border-orange-200/50', icon: <FiFlag className="w-3 h-3 sm:w-4 sm:h-4" /> },
-  Medium:   { color: '#eab308', bg: 'bg-amber-50/80', text: 'text-amber-600', border: 'border-amber-200/50', icon: <FiStar className="w-3 h-3 sm:w-4 sm:h-4" /> },
+  Medium:   { color: '#8b5cf6', bg: 'bg-purple-50/80', text: 'text-purple-600', border: 'border-purple-200/50', icon: <FiStar className="w-3 h-3 sm:w-4 sm:h-4" /> },
   Low:      { color: '#22c55e', bg: 'bg-emerald-50/80', text: 'text-emerald-600', border: 'border-emerald-200/50', icon: <FiCheckCircle className="w-3 h-3 sm:w-4 sm:h-4" /> },
 };
 
@@ -137,13 +137,15 @@ const CountdownTimer = ({ targetDate }) => {
   );
 };
 
-function MyTasks() {
+function MyTodayTasks() {
   const navigate = useNavigate();
   const [employeeName, setName] = useState('');
   const [employeeId, setEmpId] = useState('');
+  const [todayDate, setTodayDate] = useState('');
   
   // ─── Tasks State ───
   const [tasks, setTasks] = useState([]);
+  const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -151,13 +153,7 @@ function MyTasks() {
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterPriority, setFilterPriority] = useState('ALL');
   const [filterType, setFilterType] = useState('ALL');
-  const [filterDue, setFilterDue] = useState('ALL');
   const [search, setSearch] = useState('');
-  
-  // ─── Upcoming Tasks Popup ───
-  const [showUpcomingPopup, setShowUpcomingPopup] = useState(false);
-  const [upcomingTasks, setUpcomingTasks] = useState([]);
-  const [popupShown, setPopupShown] = useState(false);
   
   // ─── Modals State ───
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -167,7 +163,7 @@ function MyTasks() {
     progress: 0,
     remark: '',
     expenses: [],
-    status: ''
+    status: 'Pending'
   });
   const [employeeProgressData, setEmployeeProgressData] = useState([]);
   const [attachments, setAttachments] = useState([]);
@@ -306,55 +302,50 @@ function MyTasks() {
       const id = d.employee?._id || d.employee?.id || d._id || d.id || d.userId || '';
       setName(name);
       setEmpId(id);
+      
+      const today = new Date();
+      setTodayDate(today.toLocaleDateString('en-IN', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }));
     } catch (err) {
       console.error(err);
       navigate('/');
     }
   }, [navigate]);
 
-  // ─── Fetch Tasks ───
-  const fetchTasks = useCallback(async () => {
+  // ─── Fetch Today's Tasks ───
+  const fetchTodayTasks = useCallback(async () => {
     if (!employeeId) return;
     setLoading(true);
     setError('');
     try {
-      const res = await axios.get(`${TASK_API}/my-assigned-tasks/${employeeId}`);
+      console.log("📌 Fetching today's tasks for employee:", employeeId);
+      const res = await axios.get(`${TASK_API}/mytodaystasks/${employeeId}`);
       const data = res.data;
-      const tasksData = Array.isArray(data) ? data : data.tasks || [];
-      setTasks(tasksData);
       
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const sevenDaysFromNow = new Date(today);
-      sevenDaysFromNow.setDate(today.getDate() + 7);
-      
-      const upcoming = tasksData.filter(task => {
-        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected') return false;
-        if (task.progress >= 100) return false;
-        const submitDate = new Date(task.submitDate);
-        submitDate.setHours(0, 0, 0, 0);
-        return submitDate >= today && submitDate <= sevenDaysFromNow;
-      });
-      
-      if (upcoming.length > 0 && !popupShown) {
-        setUpcomingTasks(upcoming);
-        setShowUpcomingPopup(true);
-        setPopupShown(true);
+      if (data.success) {
+        console.log("📌 Today's tasks fetched:", data.tasks?.length || 0);
+        setTasks(data.tasks || []);
+        setStats(data.stats || {});
+      } else {
+        setError('Failed to load today\'s tasks');
       }
-      
     } catch (err) {
-      console.error('Fetch tasks error:', err);
-      setError(err.response?.data?.message || 'Failed to load tasks');
+      console.error('Fetch today tasks error:', err);
+      setError(err.response?.data?.message || 'Failed to load today\'s tasks');
     } finally {
       setLoading(false);
     }
-  }, [employeeId, popupShown]);
+  }, [employeeId]);
 
   useEffect(() => {
     if (employeeId) {
-      fetchTasks();
+      fetchTodayTasks();
     }
-  }, [employeeId, fetchTasks]);
+  }, [employeeId, fetchTodayTasks]);
 
   const fetchTaskIssues = useCallback(async (taskId) => {
     setIssuesLoading(true);
@@ -388,9 +379,16 @@ function MyTasks() {
 
   // ─── Handle Update Click with Employee Progress ───
   const handleUpdateClick = (task) => {
+    console.log("📌 handleUpdateClick called for task:", task.taskName);
     setSelectedTask(task);
     
     let progress = task.progress || 0;
+    let status = task.status || 'Pending';
+    
+    // If progress is 100%, set status to Completed
+    if (progress >= 100) {
+      status = 'Completed';
+    }
     
     // ─── Get employee-wise progress ───
     const assignedEmployees = task.assignedTo || [];
@@ -434,12 +432,9 @@ function MyTasks() {
     if (employeeProgress.length > 0) {
       const total = employeeProgress.reduce((sum, emp) => sum + emp.progress, 0);
       progress = Math.round(total / employeeProgress.length);
-    }
-    
-    // ─── FIX: If progress is 100%, set status to Completed ───
-    let status = task.status || 'Pending';
-    if (progress >= 100) {
-      status = 'Completed';
+      if (progress >= 100) {
+        status = 'Completed';
+      }
     }
     
     setUpdateData({
@@ -460,29 +455,6 @@ function MyTasks() {
     setExpenseError('');
     setExpensesExpanded(false);
     setShowUpdateModal(true);
-  };
-
-  // ─── Handle Status Change for Single Tasks ───
-  const handleStatusChange = (newStatus) => {
-    setUpdateData(prev => ({
-      ...prev,
-      status: newStatus
-    }));
-    
-    if (newStatus === 'Completed') {
-      setUpdateData(prev => ({
-        ...prev,
-        status: newStatus,
-        progress: 100
-      }));
-      
-      showCutePopupWithVoice(
-        '✅ Task Completed!',
-        'success',
-        `Awesome! You've completed the task! Great job! 🌟`
-      );
-      triggerConfetti();
-    }
   };
 
   // ─── Handle Attachment from Gallery ───
@@ -639,8 +611,35 @@ function MyTasks() {
     });
   };
 
+  // ─── Check if subtask can be completed ───
+  const canCompleteSubtask = (subtask) => {
+    if (!subtask.submitDate) return true;
+    if (subtask.status === 'Completed') return true;
+    const now = new Date();
+    const submitDate = new Date(subtask.submitDate);
+    return now >= submitDate;
+  };
+
   // ─── Handle Subtask Checkbox Click ───
   const handleSubtaskCheckboxChange = (subtask, isCompleted) => {
+    if (isCompleted) {
+      if (!canCompleteSubtask(subtask)) {
+        const formattedDate = new Date(subtask.submitDate).toLocaleString('en-IN', {
+          day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        });
+        
+        showCutePopupWithVoice(
+          '⏰ Wait! Not yet!',
+          'error',
+          `Sorry! You cannot complete "${subtask.name}" before ${formattedDate}. Please wait until the scheduled time.`
+        );
+        
+        showToastMessage(`⚠️ Cannot complete "${subtask.name}" before ${formattedDate}`, 'error');
+        return;
+      }
+    }
+    
     updateSubtaskStatus(subtask._id, isCompleted ? 'Completed' : 'Pending');
     
     if (isCompleted) {
@@ -655,6 +654,13 @@ function MyTasks() {
 
   // ─── Calculate progress from subtasks ───
   const calculateProgressFromSubtasks = (subtasks) => {
+    if (!subtasks || subtasks.length === 0) return 0;
+    const completed = subtasks.filter(s => s.status === 'Completed').length;
+    return Math.round((completed / subtasks.length) * 100);
+  };
+
+  // ─── Get subtask progress for UI ───
+  const getSubtaskProgress = (subtasks) => {
     if (!subtasks || subtasks.length === 0) return 0;
     const completed = subtasks.filter(s => s.status === 'Completed').length;
     return Math.round((completed / subtasks.length) * 100);
@@ -675,10 +681,7 @@ function MyTasks() {
         calculatedProgress = calculateProgressFromSubtasks(subtasksToSend);
       }
       
-      const hasMultipleEmployees = selectedTask.assignedTo && selectedTask.assignedTo.length > 1;
-      const hasSubtasks = selectedTask.subtasks && selectedTask.subtasks.length > 0;
-      
-      // ─── FIX: If progress is 100%, set status to Completed ───
+      // If progress is 100%, set status to Completed
       let finalStatus = updateData.status;
       if (calculatedProgress >= 100) {
         finalStatus = 'Completed';
@@ -687,17 +690,17 @@ function MyTasks() {
       const updatePayload = {
         updateText: updateData.updateText,
         progress: calculatedProgress,
+        status: finalStatus,
         remark: updateData.remark,
         expenses: updateData.expenses,
-        subtasks: subtasksToSend,
-        status: finalStatus
+        subtasks: subtasksToSend
       };
       
       const response = await updateTaskByEmployee(selectedTask._id, employeeId, updatePayload, attachments);
       
       if (response.success) {
         setShowUpdateModal(false);
-        fetchTasks();
+        fetchTodayTasks();
         
         triggerConfetti();
         
@@ -769,7 +772,7 @@ function MyTasks() {
         issueDescription: '',
         priority: 'Medium'
       });
-      fetchTasks();
+      fetchTodayTasks();
       
       showCutePopupWithVoice(
         '✅ Issue Reported Successfully!',
@@ -791,7 +794,7 @@ function MyTasks() {
     if (!window.confirm('Are you sure you want to delete this task?')) return;
     try {
       await deleteTask(taskId);
-      fetchTasks();
+      fetchTodayTasks();
       showToastMessage('Task deleted successfully!', 'success');
     } catch (err) {
       setError('Failed to delete task');
@@ -847,6 +850,34 @@ function MyTasks() {
     return <FiFile className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />;
   };
 
+  // ─── Get time difference display ───
+  const getTimeDifferenceDisplay = (date) => {
+    if (!date) return null;
+    const now = new Date();
+    const checkDate = new Date(date);
+    const diffMs = checkDate - now;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffMs < 0) {
+      const lateHours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+      const lateMinutes = Math.floor((Math.abs(diffMs) % (1000 * 60 * 60)) / (1000 * 60));
+      return {
+        type: 'late',
+        text: `Late by ${lateHours}h ${lateMinutes}m`
+      };
+    } else if (diffMs > 0) {
+      return {
+        type: 'early',
+        text: `${diffHours}h ${diffMinutes}m remaining`
+      };
+    }
+    return {
+      type: 'on-time',
+      text: 'Due now!'
+    };
+  };
+
   // ─── Filter Tasks ───
   const getFilteredTasks = () => {
     let filtered = [...tasks];
@@ -857,46 +888,18 @@ function MyTasks() {
       filtered = filtered.filter(t => t.assignType === 'SELF');
     }
     
-    // ─── FIX: Filter status with progress 100% as Completed ───
     if (filterStatus !== 'ALL') {
       filtered = filtered.filter((t) => {
+        // If filtering by Completed, include tasks with progress 100%
         if (filterStatus === 'Completed') {
           return t.progress >= 100 || t.status === 'Completed';
         }
-        return t.status === filterStatus && t.progress < 100;
+        return t.status === filterStatus;
       });
     }
     
     if (filterPriority !== 'ALL') {
       filtered = filtered.filter((t) => t.priority === filterPriority);
-    }
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const sevenDaysFromNow = new Date(today);
-    sevenDaysFromNow.setDate(today.getDate() + 7);
-    
-    if (filterDue === 'TODAY') {
-      filtered = filtered.filter(task => {
-        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
-        const submitDate = new Date(task.submitDate);
-        submitDate.setHours(0, 0, 0, 0);
-        return submitDate.getTime() === today.getTime();
-      });
-    } else if (filterDue === 'UPCOMING') {
-      filtered = filtered.filter(task => {
-        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
-        const submitDate = new Date(task.submitDate);
-        submitDate.setHours(0, 0, 0, 0);
-        return submitDate >= today && submitDate <= sevenDaysFromNow && submitDate.getTime() !== today.getTime();
-      });
-    } else if (filterDue === 'OVERDUE') {
-      filtered = filtered.filter(task => {
-        if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
-        const submitDate = new Date(task.submitDate);
-        submitDate.setHours(0, 0, 0, 0);
-        return submitDate < today;
-      });
     }
     
     if (search) {
@@ -938,49 +941,7 @@ function MyTasks() {
     Critical: tasks.filter(t => t.priority === 'Critical').length,
   };
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const sevenDaysFromNow = new Date(today);
-  sevenDaysFromNow.setDate(today.getDate() + 7);
-
-  // ─── FIX: Due counts with progress 100% excluded ───
-  const dueCounts = {
-    ALL: tasks.length,
-    TODAY: tasks.filter(task => {
-      if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
-      const submitDate = new Date(task.submitDate);
-      submitDate.setHours(0, 0, 0, 0);
-      return submitDate.getTime() === today.getTime();
-    }).length,
-    UPCOMING: tasks.filter(task => {
-      if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
-      const submitDate = new Date(task.submitDate);
-      submitDate.setHours(0, 0, 0, 0);
-      return submitDate >= today && submitDate <= sevenDaysFromNow && submitDate.getTime() !== today.getTime();
-    }).length,
-    OVERDUE: tasks.filter(task => {
-      if (!task.submitDate || task.status === 'Completed' || task.status === 'Rejected' || task.progress >= 100) return false;
-      const submitDate = new Date(task.submitDate);
-      submitDate.setHours(0, 0, 0, 0);
-      return submitDate < today;
-    }).length,
-  };
-
   const mainContentPadding = sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-[280px]';
-
-  const closeUpcomingPopup = () => {
-    setShowUpcomingPopup(false);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-  };
-
-  // ─── Get subtask progress for UI ───
-  const getSubtaskProgress = (subtasks) => {
-    if (!subtasks || subtasks.length === 0) return 0;
-    const completed = subtasks.filter(s => s.status === 'Completed').length;
-    return Math.round((completed / subtasks.length) * 100);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex">
@@ -995,26 +956,40 @@ function MyTasks() {
           <div className="flex flex-wrap items-center justify-between px-2 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-3 lg:py-4 gap-1 sm:gap-2">
             <div className="flex items-center gap-1.5 sm:gap-3">
               <div className="w-7 h-7 sm:w-10 sm:h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30 flex-shrink-0">
-                <FaTasks className="text-white w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                <FiSun className="text-white w-3.5 h-3.5 sm:w-5 sm:h-5" />
               </div>
               <div className="min-w-0">
                 <h2 className="text-xs sm:text-base md:text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent hidden xs:block truncate">
-                  My Tasks
+                  Today's Tasks
                 </h2>
                 <h2 className="text-xs sm:text-sm font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent xs:hidden">
-                  My Tasks
+                  Today's Tasks
                 </h2>
                 <p className="text-[6px] sm:text-[10px] text-gray-500 hidden xs:block truncate max-w-[100px] sm:max-w-[200px]">
-                  {tasks.length} tasks assigned
+                  {todayDate} • {tasks.length} tasks
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-1 sm:gap-2 md:gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 bg-white/40 backdrop-blur-xl rounded-xl border border-white/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <div className="flex items-center gap-1.5">
+                  <FiCalendar className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-500" />
+                  <p className="text-[7px] sm:text-[10px] font-semibold text-gray-700 whitespace-nowrap">
+                    {todayDate}
+                  </p>
+                </div>
+                <div className="w-px h-4 bg-gray-300/50"></div>
+                <div className="flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
+                  <span className="text-[6px] sm:text-[8px] text-emerald-600 font-medium">Today</span>
+                </div>
+              </div>
+
               <button onClick={() => navigate('/create-task')} className="px-1.5 sm:px-3 lg:px-4 py-0.5 sm:py-1.5 lg:py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full text-[8px] sm:text-xs lg:text-sm font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-1 sm:gap-2">
                 <FiPlus className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4" />
                 <span className="hidden xs:inline">Create</span>
               </button>
-              <button onClick={fetchTasks} className="p-1 sm:p-2 lg:p-2.5 bg-white/40 backdrop-blur-sm rounded-xl border border-white/30 hover:bg-white/60 transition-all hover:scale-105">
+              <button onClick={fetchTodayTasks} className="p-1 sm:p-2 lg:p-2.5 bg-white/40 backdrop-blur-sm rounded-xl border border-white/30 hover:bg-white/60 transition-all hover:scale-105">
                 <FiRefreshCw className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
               </button>
               <button onClick={handleLogout} className="px-1.5 sm:px-3 lg:px-4 py-0.5 sm:py-1.5 lg:py-2 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-full text-[8px] sm:text-xs lg:text-sm font-semibold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 transition-all hover:scale-105 flex items-center gap-1 sm:gap-2">
@@ -1030,114 +1005,18 @@ function MyTasks() {
 
         <main className="flex-1 overflow-y-auto p-2 sm:p-4 md:p-6 lg:p-8">
           <div className="space-y-3 sm:space-y-6">
-            {/* ─── Upcoming Tasks Popup ─── */}
-            {showUpcomingPopup && upcomingTasks.length > 0 && (
-              <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
-                <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-slideDown relative">
-                  <button
-                    onClick={closeUpcomingPopup}
-                    className="absolute top-3 sm:top-4 right-3 sm:right-4 p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-all duration-200 hover:rotate-90 group"
-                    title="Close"
-                  >
-                    <FiX className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
-                  </button>
-
-                  <div className="p-4 sm:p-8">
-                    <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 flex items-center justify-center shadow-xl shadow-amber-500/30 animate-pulse-slow flex-shrink-0">
-                        <FiBell className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
-                      </div>
-                      <div className="text-center sm:text-left">
-                        <h2 className="text-lg sm:text-2xl font-bold text-gray-800">🔔 Upcoming Tasks Alert!</h2>
-                        <p className="text-sm sm:text-base text-gray-600">
-                          <span className="font-semibold text-amber-600">{upcomingTasks.length}</span> tasks are due within 7 days
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 border border-amber-200/50">
-                      <p className="text-xs sm:text-sm text-gray-700">
-                        <strong>Hey {employeeName}!</strong> There {upcomingTasks.length === 1 ? 'is' : 'are'} 
-                        <span className="font-bold text-amber-600"> {upcomingTasks.length} </span> 
-                        task{upcomingTasks.length > 1 ? 's' : ''} due soon. Please complete them before they become overdue! ⏰
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 sm:space-y-3 max-h-48 sm:max-h-60 overflow-y-auto mb-4 sm:mb-6">
-                      {upcomingTasks.map((task, idx) => {
-                        const daysLeft = Math.ceil((new Date(task.submitDate) - new Date()) / (1000 * 60 * 60 * 24));
-                        const pr = priorityMeta[task.priority] || priorityMeta['Medium'];
-                        const st = statusMeta[task.status] || statusMeta['Pending'];
-                        return (
-                          <div key={idx} className="bg-white/50 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-gray-200/50 hover:shadow-md transition-all">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-                              <div className="flex-1 w-full sm:w-auto">
-                                <h4 className="font-semibold text-sm sm:text-base text-gray-800">{task.taskName || task.title}</h4>
-                                <p className="text-xs sm:text-sm text-gray-500 truncate max-w-[200px] sm:max-w-[300px]">{task.description}</p>
-                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 mt-1 sm:mt-2">
-                                  <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-semibold ${pr.bg} ${pr.text} border ${pr.border}`}>
-                                    {pr.icon}
-                                    {task.priority}
-                                  </span>
-                                  <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-semibold ${st.bg} ${st.text} border ${st.border}`}>
-                                    {st.icon}
-                                    {task.status}
-                                  </span>
-                                  <span className="text-[10px] sm:text-xs text-amber-600 font-medium">
-                                    <FiClock className="inline mr-0.5 sm:mr-1 w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                                    {daysLeft <= 0 ? 'Overdue!' : `${daysLeft} day${daysLeft > 1 ? 's' : ''} left`}
-                                  </span>
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => {
-                                  closeUpcomingPopup();
-                                  handleViewTask(task);
-                                }}
-                                className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg font-medium hover:scale-105 transition-all flex-shrink-0"
-                              >
-                                View
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex flex-wrap justify-end gap-2 sm:gap-3">
-                      <button
-                        onClick={closeUpcomingPopup}
-                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs sm:text-sm font-medium transition-all"
-                      >
-                        Dismiss
-                      </button>
-                      <button
-                        onClick={() => {
-                          closeUpcomingPopup();
-                          setFilterDue('UPCOMING');
-                        }}
-                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-1.5 sm:gap-2"
-                      >
-                        <FiEye className="w-3 h-3 sm:w-4 sm:h-4" />
-                        View All
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* ─── Stats ─── */}
             <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 sm:gap-3 md:gap-4">
-              <StatCard label="Total" value={totalTasks} icon={<FiBarChart2 className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-indigo-400 to-indigo-500 shadow-indigo-500/30" />
-              <StatCard label="In Progress" value={counts['In Progress']} icon={<FiRefreshCw className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-blue-400 to-blue-500 shadow-blue-500/30" />
-              <StatCard label="Completed" value={counts.Completed} icon={<FiCheckCircle className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-emerald-500/30" />
-              <StatCard label="Pending" value={counts.Pending} icon={<FiClock className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-amber-400 to-amber-500 shadow-amber-500/30" />
-              <StatCard label="Today Due" value={dueCounts.TODAY} icon={<FiCalendar className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-purple-400 to-purple-500 shadow-purple-500/30" />
-              <StatCard label="Overdue" value={dueCounts.OVERDUE} icon={<FiAlertCircle className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-rose-400 to-rose-500 shadow-rose-500/30" />
+              <StatCard label="Today's Total" value={stats.total || totalTasks} icon={<FiSun className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-indigo-400 to-indigo-500 shadow-indigo-500/30" />
+              <StatCard label="In Progress" value={stats.inProgress || counts['In Progress']} icon={<FiRefreshCw className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-blue-400 to-blue-500 shadow-blue-500/30" />
+              <StatCard label="Completed" value={stats.completed || counts.Completed} icon={<FiCheckCircle className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-emerald-500/30" />
+              <StatCard label="Pending" value={stats.pending || counts.Pending} icon={<FiClock className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-amber-400 to-amber-500 shadow-amber-500/30" />
+              <StatCard label="Overdue" value={stats.overdue || counts.Overdue} icon={<FiAlertCircle className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-rose-400 to-rose-500 shadow-rose-500/30" />
+              <StatCard label="Daily Tasks" value={stats.dailyTasks || 0} icon={<FiRepeat className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-purple-400 to-purple-500 shadow-purple-500/30" />
             </div>
 
-            {/* ─── Dropdown Filters ─── */}
+          
+            {/* ─── Filters ─── */}
             <div className="flex flex-wrap gap-2 sm:gap-3">
               <div className="relative">
                 <select
@@ -1183,29 +1062,12 @@ function MyTasks() {
                 <FiChevronDown className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 text-gray-400 w-3 h-3 sm:w-4 sm:h-4 pointer-events-none" />
               </div>
 
-              <div className="relative">
-                <select
-                  value={filterDue}
-                  onChange={(e) => setFilterDue(e.target.value)}
-                  className={`px-2 sm:px-4 py-1 sm:py-2 bg-white/40 backdrop-blur-sm border border-white/30 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[8px] sm:text-sm appearance-none pr-6 sm:pr-8 min-w-[100px] sm:min-w-[130px] ${
-                    filterDue !== 'ALL' ? 'border-indigo-500/50 bg-indigo-50/30' : ''
-                  }`}
-                >
-                  <option value="ALL">All Due</option>
-                  <option value="TODAY">Today ({dueCounts.TODAY})</option>
-                  <option value="UPCOMING">Upcoming ({dueCounts.UPCOMING})</option>
-                  <option value="OVERDUE">Overdue ({dueCounts.OVERDUE})</option>
-                </select>
-                <FiChevronDown className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 text-gray-400 w-3 h-3 sm:w-4 sm:h-4 pointer-events-none" />
-              </div>
-
-              {(filterType !== 'ALL' || filterStatus !== 'ALL' || filterPriority !== 'ALL' || filterDue !== 'ALL' || search) && (
+              {(filterType !== 'ALL' || filterStatus !== 'ALL' || filterPriority !== 'ALL' || search) && (
                 <button
                   onClick={() => {
                     setFilterType('ALL');
                     setFilterStatus('ALL');
                     setFilterPriority('ALL');
-                    setFilterDue('ALL');
                     setSearch('');
                   }}
                   className="px-2 sm:px-4 py-1 sm:py-2 bg-rose-50/80 backdrop-blur-sm border border-rose-200/50 rounded-full text-[8px] sm:text-sm font-medium text-rose-600 hover:bg-rose-100 transition-all flex items-center gap-0.5 sm:gap-1.5"
@@ -1239,21 +1101,18 @@ function MyTasks() {
             {loading ? (
               <div className="flex flex-col items-center justify-center py-8 sm:py-16 lg:py-20 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/30">
                 <div className="w-6 h-6 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></div>
-                <p className="mt-1.5 sm:mt-3 lg:mt-4 text-[10px] sm:text-sm text-gray-500">Loading...</p>
+                <p className="mt-1.5 sm:mt-3 lg:mt-4 text-[10px] sm:text-sm text-gray-500">Loading today's tasks...</p>
               </div>
             ) : filteredTasks.length === 0 ? (
               <div className="text-center py-8 sm:py-16 lg:py-20 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/30">
                 <div className="w-10 h-10 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto bg-gradient-to-r from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-2 sm:mb-4">
-                  <FiList className="w-5 h-5 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-indigo-400" />
+                  <FiSun className="w-5 h-5 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-amber-400" />
                 </div>
-                <h3 className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-700">No tasks found</h3>
+                <h3 className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-700">No tasks for today! 🎉</h3>
                 <p className="text-[10px] sm:text-sm text-gray-400 mt-0.5 sm:mt-1">
-                  {filterType === 'ASSIGNED' ? 'No tasks assigned to you' : 
-                   filterType === 'CREATED' ? 'You haven\'t created any tasks' : 
-                   filterDue === 'TODAY' ? 'No tasks due today 🎉' :
-                   filterDue === 'UPCOMING' ? 'No upcoming tasks in next 7 days 🎉' :
-                   filterDue === 'OVERDUE' ? 'No overdue tasks! Great job! 🎉' :
-                   'No tasks found'}
+                  {filterType === 'ASSIGNED' ? 'No tasks assigned to you today' : 
+                   filterType === 'CREATED' ? 'You haven\'t created any tasks today' : 
+                   'You have no tasks for today. Enjoy your day! ☀️'}
                 </p>
               </div>
             ) : (
@@ -1274,7 +1133,7 @@ function MyTasks() {
                     </thead>
                     <tbody className="divide-y divide-gray-200/50">
                       {filteredTasks.map((t, index) => {
-                        // ─── FIX: If progress is 100%, treat as Completed ───
+                        // ─── FIX: Determine effective status based on progress ───
                         const isCompleted = t.progress >= 100;
                         const effectiveStatus = isCompleted ? 'Completed' : t.status;
                         const st = statusMeta[effectiveStatus] || statusMeta['Pending'];
@@ -1285,18 +1144,22 @@ function MyTasks() {
                         const isOverdue = t.submitDate && 
                                           new Date(t.submitDate) < new Date() && 
                                           !isCompleted &&
-                                          t.status !== 'Rejected' &&
+                                          effectiveStatus !== 'Rejected' &&
                                           t.progress < 100;
                         
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
                         const isToday = t.submitDate && new Date(t.submitDate).setHours(0,0,0,0) === today.getTime();
                         
+                        const isDaily = t.frequency && t.frequency.includes('Daily');
+                        const timeDiff = t.submitDate ? getTimeDifferenceDisplay(t.submitDate) : null;
+                        
                         return (
-                          <tr key={t._id} className={`hover:bg-white/30 transition-all duration-200 ${index % 2 === 0 ? 'bg-white/20' : 'bg-white/10'} ${isOverdue ? 'border-l-4 border-l-rose-500' : ''} ${isToday && !isOverdue && !isCompleted ? 'border-l-4 border-l-purple-500' : ''} ${isCompleted ? 'border-l-4 border-l-emerald-500' : ''}`}>
+                          <tr key={t._id} className={`hover:bg-white/30 transition-all duration-200 ${index % 2 === 0 ? 'bg-white/20' : 'bg-white/10'} ${isOverdue ? 'border-l-4 border-l-rose-500' : ''} ${isToday && !isOverdue && !isCompleted ? 'border-l-4 border-l-purple-500' : ''} ${isCompleted ? 'border-l-4 border-l-emerald-500' : ''} ${isDaily ? 'border-r-4 border-r-amber-400' : ''}`}>
                             <td className="px-2 sm:px-6 py-2 sm:py-4">
                               <div className="text-[8px] sm:text-sm font-semibold text-gray-800 truncate max-w-[60px] sm:max-w-[150px]">{t.taskName}</div>
                               
+                              {/* ─── Show Completed badge first ─── */}
                               {isCompleted && (
                                 <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-emerald-600 font-medium">
                                   <FiCheckCircle className="w-2 h-2 sm:w-3 sm:h-3" />
@@ -1304,16 +1167,32 @@ function MyTasks() {
                                 </span>
                               )}
                               
+                              {isDaily && !isCompleted && (
+                                <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-amber-600 font-medium">
+                                  <FiRepeat className="w-2 h-2 sm:w-3 sm:h-3" />
+                                  Daily
+                                </span>
+                              )}
+                              
+                              {/* ─── Only show Overdue if NOT completed ─── */}
                               {isOverdue && (
                                 <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-rose-600 font-medium ml-0.5 sm:ml-1">
                                   <FiAlertCircle className="w-2 h-2 sm:w-3 sm:h-3" />
                                   Overdue!
                                 </span>
                               )}
+                              
                               {isToday && !isOverdue && !isCompleted && (
                                 <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-purple-600 font-medium ml-0.5 sm:ml-1">
                                   <FiCalendar className="w-2 h-2 sm:w-3 sm:h-3" />
                                   Due Today!
+                                </span>
+                              )}
+                              
+                              {timeDiff && timeDiff.type === 'early' && !isCompleted && (
+                                <span className="inline-flex items-center gap-0.5 text-[6px] sm:text-[10px] text-emerald-600 font-medium ml-0.5 sm:ml-1">
+                                  <FiClock className="w-2 h-2 sm:w-3 sm:h-3" />
+                                  {timeDiff.text}
                                 </span>
                               )}
                             </td>
@@ -1486,14 +1365,6 @@ function MyTasks() {
                             }}
                           />
                         </div>
-                        <p className="text-[6px] sm:text-[8px] text-gray-400 mt-0.5">
-                          {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
-                            `${selectedTask.subtasks.filter(s => s.status === 'Completed').length} of ${selectedTask.subtasks.length} employees completed`
-                          ) : (
-                            updateData.progress >= 100 ? '✅ All employees completed!' : 
-                            `${employeeProgressData.filter(e => e.progress >= 100).length} of ${employeeProgressData.length} employees completed`
-                          )}
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -1514,7 +1385,7 @@ function MyTasks() {
                   />
                 </div>
 
-                {/* ─── STATUS DROPDOWN FOR SINGLE TASKS ─── */}
+                {/* ─── STATUS DROPDOWN ─── */}
                 {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && selectedTask?.assignedTo?.length === 1 && (
                   <div>
                     <label className="block text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5">
@@ -1522,8 +1393,26 @@ function MyTasks() {
                       Status
                     </label>
                     <select
-                      value={updateData.status}
-                      onChange={(e) => handleStatusChange(e.target.value)}
+                      value={updateData.status || 'Pending'}
+                      onChange={(e) => {
+                        setUpdateData(prev => ({
+                          ...prev,
+                          status: e.target.value
+                        }));
+                        if (e.target.value === 'Completed') {
+                          setUpdateData(prev => ({
+                            ...prev,
+                            status: 'Completed',
+                            progress: 100
+                          }));
+                          showCutePopupWithVoice(
+                            '✅ Task Completed!',
+                            'success',
+                            `Awesome! You've completed the task! Great job! 🌟`
+                          );
+                          triggerConfetti();
+                        }
+                      }}
                       className="w-full px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-[10px] sm:text-sm"
                     >
                       <option value="Pending">Pending</option>
@@ -1956,7 +1845,6 @@ function MyTasks() {
               </button>
             </div>
             <div className="px-3 sm:px-6 py-3 sm:py-6">
-              {/* ─── Task Header ─── */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-1.5 sm:gap-0 mb-2 sm:mb-4">
                 <div className="w-full sm:w-auto">
                   <h2 className="text-sm sm:text-2xl font-bold text-gray-800">{viewTask.taskName}</h2>
@@ -1974,43 +1862,6 @@ function MyTasks() {
                 </div>
               </div>
 
-              {/* ─── Assigned Employees ─── */}
-              {viewTask.assignedTo && viewTask.assignedTo.length > 0 && (
-                <div className="mb-2 sm:mb-4">
-                  <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
-                    <FiUsers className="w-3 h-3 sm:w-4 sm:h-4" />
-                    Assigned To ({viewTask.assignedTo.length})
-                  </h4>
-                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                    {viewTask.assignedTo.map((emp, idx) => {
-                      const empName = emp.name || emp.fullName || emp.email || 'Employee';
-                      const isCurrentEmployee = emp._id?.toString() === employeeId;
-                      return (
-                        <div key={idx} className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full border ${
-                          isCurrentEmployee 
-                            ? 'bg-indigo-50/80 border-indigo-300' 
-                            : 'bg-white/50 border-gray-200'
-                        }`}>
-                          <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-white text-[8px] sm:text-xs font-bold ${
-                            isCurrentEmployee ? 'bg-gradient-to-r from-indigo-500 to-purple-500' : 'bg-gray-400'
-                          }`}>
-                            {getInitials(empName)}
-                          </div>
-                          <span className={`text-[8px] sm:text-xs font-medium ${isCurrentEmployee ? 'text-indigo-700' : 'text-gray-600'}`}>
-                            {empName}
-                            {isCurrentEmployee && ' (You)'}
-                          </span>
-                          {emp.employeeId && (
-                            <span className="text-[6px] sm:text-[10px] text-gray-400">#{emp.employeeId}</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* ─── Description ─── */}
               <div className="mb-2 sm:mb-4">
                 <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
                   <FiMessageSquare className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -2021,7 +1872,6 @@ function MyTasks() {
                 </p>
               </div>
 
-              {/* ─── Task Info Grid ─── */}
               <div className="grid grid-cols-2 gap-1.5 sm:gap-4 mb-2 sm:mb-4">
                 <div className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-4 border border-white/30">
                   <p className="text-[6px] sm:text-xs text-gray-500">Submit Date</p>
@@ -2044,34 +1894,8 @@ function MyTasks() {
                     <span className="text-[8px] sm:text-sm font-bold text-gray-800">{viewTask.progress || 0}%</span>
                   </div>
                 </div>
-                <div className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-4 border border-white/30">
-                  <p className="text-[6px] sm:text-xs text-gray-500">Assign Type</p>
-                  <p className="text-[10px] sm:text-sm font-semibold text-gray-800">{viewTask.assignType || 'N/A'}</p>
-                </div>
-                <div className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-4 border border-white/30">
-                  <p className="text-[6px] sm:text-xs text-gray-500">Department</p>
-                  <p className="text-[10px] sm:text-sm font-semibold text-gray-800">{viewTask.department || 'N/A'}</p>
-                </div>
               </div>
 
-              {/* ─── Frequency ─── */}
-              {viewTask.frequency && viewTask.frequency.length > 0 && (
-                <div className="mb-2 sm:mb-4">
-                  <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
-                    <FiRepeat className="w-3 h-3 sm:w-4 sm:h-4" />
-                    Frequency
-                  </h4>
-                  <div className="flex flex-wrap gap-1 sm:gap-2">
-                    {viewTask.frequency.map((freq, idx) => (
-                      <span key={idx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-indigo-50/80 rounded-full text-[8px] sm:text-xs font-medium text-indigo-700 border border-indigo-200/50">
-                        {freq}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ─── Subtasks ─── */}
               {viewTask.subtasks && viewTask.subtasks.length > 0 && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -2092,9 +1916,6 @@ function MyTasks() {
                             {subtask.submitDate && (
                               <p className="text-[6px] sm:text-[10px] text-gray-400">Submit by: {formatDate(subtask.submitDate)}</p>
                             )}
-                            {subtask.submittedDate && (
-                              <p className="text-[6px] sm:text-[10px] text-emerald-600">✅ Completed: {formatDateTime(subtask.submittedDate)}</p>
-                            )}
                           </div>
                           <span className={`px-1 sm:px-2 py-0.5 rounded-full text-[6px] sm:text-[10px] font-medium ${
                             subtask.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
@@ -2110,7 +1931,6 @@ function MyTasks() {
                 </div>
               )}
 
-              {/* ─── Employee Updates ─── */}
               {viewTask.employeeUpdates && viewTask.employeeUpdates.length > 0 && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -2118,56 +1938,38 @@ function MyTasks() {
                     Employee Updates ({viewTask.employeeUpdates.length})
                   </h4>
                   <div className="space-y-1 sm:space-y-2 max-h-24 sm:max-h-40 overflow-y-auto">
-                    {viewTask.employeeUpdates.map((update, idx) => {
-                      const empName = update.employeeId?.name || update.employeeId?.fullName || 'Employee';
-                      return (
-                        <div key={idx} className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-3 border border-white/30">
-                          <div className="flex items-center gap-1 sm:gap-2">
-                            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-400 flex items-center justify-center text-white text-[8px] sm:text-xs font-bold">
-                              {getInitials(empName)}
-                            </div>
-                            <span className="text-[8px] sm:text-xs font-medium text-gray-600">{empName}</span>
-                          </div>
-                          <p className="text-[10px] sm:text-sm font-medium text-gray-800 mt-0.5">{update.updateText}</p>
-                          <div className="flex flex-wrap items-center gap-1 sm:gap-3 mt-0.5 sm:mt-1 text-[6px] sm:text-xs text-gray-500">
-                            <span>Progress: {update.progress}%</span>
-                            {update.remark && <span>Remark: {update.remark}</span>}
-                            <span>{formatDateTime(update.updatedAt)}</span>
-                          </div>
-                          {update.attachments && update.attachments.length > 0 && (
-                            <div className="mt-1 sm:mt-2 space-y-0.5 sm:space-y-1">
-                              {update.attachments.map((att, attIdx) => (
-                                <div key={attIdx} className="flex items-center gap-1 sm:gap-2 p-0.5 sm:p-1.5 bg-white/30 rounded-lg border border-white/30 hover:bg-white/50 transition-all group">
-                                  {getFileIcon(att.fileName)}
-                                  <span className="text-[6px] sm:text-xs text-gray-700 truncate flex-1">{att.fileName}</span>
-                                  <div className="flex items-center gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      onClick={() => handleViewAttachment(att.fileUrl, att.fileName)}
-                                      className="p-0.5 sm:p-1 hover:bg-indigo-50 rounded-full transition-colors"
-                                      title="View"
-                                    >
-                                      <FiEye className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-indigo-600" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDownloadAttachment(att.fileUrl, att.fileName)}
-                                      className="p-0.5 sm:p-1 hover:bg-emerald-50 rounded-full transition-colors"
-                                      title="Download"
-                                    >
-                                      <FiDownload className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-emerald-600" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                    {viewTask.employeeUpdates.map((update, idx) => (
+                      <div key={idx} className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-3 border border-white/30">
+                        <p className="text-[10px] sm:text-sm font-medium text-gray-800">{update.updateText}</p>
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-3 mt-0.5 sm:mt-1 text-[6px] sm:text-xs text-gray-500">
+                          <span>Progress: {update.progress}%</span>
+                          {update.remark && <span>Remark: {update.remark}</span>}
+                          <span>{formatDateTime(update.updatedAt)}</span>
                         </div>
-                      );
-                    })}
+                        {update.attachments && update.attachments.length > 0 && (
+                          <div className="mt-1 sm:mt-2 space-y-0.5 sm:space-y-1">
+                            {update.attachments.map((att, attIdx) => (
+                              <div key={attIdx} className="flex items-center gap-1 sm:gap-2 p-0.5 sm:p-1.5 bg-white/30 rounded-lg border border-white/30 hover:bg-white/50 transition-all group">
+                                {getFileIcon(att.fileName)}
+                                <span className="text-[6px] sm:text-xs text-gray-700 truncate flex-1">{att.fileName}</span>
+                                <div className="flex items-center gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => handleViewAttachment(att.fileUrl, att.fileName)} className="p-0.5 sm:p-1 hover:bg-indigo-50 rounded-full transition-colors" title="View">
+                                    <FiEye className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-indigo-600" />
+                                  </button>
+                                  <button onClick={() => handleDownloadAttachment(att.fileUrl, att.fileName)} className="p-0.5 sm:p-1 hover:bg-emerald-50 rounded-full transition-colors" title="Download">
+                                    <FiDownload className="w-2 h-2 sm:w-3.5 sm:h-3.5 text-emerald-600" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
-              {/* ─── Expenses ─── */}
               {viewTask.expenses && viewTask.expenses.length > 0 && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -2183,7 +1985,6 @@ function MyTasks() {
                               <span className="text-[10px] sm:text-sm font-bold text-gray-800">₹{exp.expenseAmount}</span>
                               <span className="text-[10px] sm:text-sm font-medium text-gray-600">- {exp.description}</span>
                             </div>
-                            
                             {exp.location && (
                               <div className="mt-0.5 sm:mt-2 space-y-0.5">
                                 {exp.location.address && (
@@ -2199,11 +2000,9 @@ function MyTasks() {
                                 )}
                               </div>
                             )}
-                            
                             {exp.distance > 0 && (
                               <p className="text-[6px] sm:text-xs text-gray-500 mt-0.5">📏 {exp.distance} km</p>
                             )}
-                            
                             <div className="mt-0.5 sm:mt-2 flex flex-wrap items-center gap-1 sm:gap-3 text-[6px] sm:text-[10px] text-gray-400">
                               <span>Added: {formatDateTime(exp.addedAt || exp.expenseDate)}</span>
                               {exp.approvalStatus && (
@@ -2215,16 +2014,12 @@ function MyTasks() {
                                   {exp.approvalStatus}
                                 </span>
                               )}
-                              {exp.addedBy?.name && (
-                                <span>by {exp.addedBy.name}</span>
-                              )}
                             </div>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                  
                   <div className="mt-1.5 sm:mt-3 p-1.5 sm:p-3 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 rounded-xl border border-indigo-200/50">
                     <div className="flex justify-between items-center">
                       <span className="text-[8px] sm:text-sm font-semibold text-gray-700">Total Expenses</span>
@@ -2236,7 +2031,6 @@ function MyTasks() {
                 </div>
               )}
 
-              {/* ─── Attachments ─── */}
               {viewTask.attachments && viewTask.attachments.length > 0 && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
@@ -2249,18 +2043,10 @@ function MyTasks() {
                         {getFileIcon(att.fileName)}
                         <span className="text-[8px] sm:text-sm text-gray-700 truncate flex-1">{att.fileName}</span>
                         <div className="flex items-center gap-0.5 sm:gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleViewAttachment(att.fileUrl, att.fileName)}
-                            className="p-0.5 sm:p-1.5 hover:bg-indigo-50 rounded-full transition-colors"
-                            title="View"
-                          >
+                          <button onClick={() => handleViewAttachment(att.fileUrl, att.fileName)} className="p-0.5 sm:p-1.5 hover:bg-indigo-50 rounded-full transition-colors" title="View">
                             <FiEye className="w-2.5 h-2.5 sm:w-4 sm:h-4 text-indigo-600 hover:scale-110 transition-transform" />
                           </button>
-                          <button
-                            onClick={() => handleDownloadAttachment(att.fileUrl, att.fileName)}
-                            className="p-0.5 sm:p-1.5 hover:bg-emerald-50 rounded-full transition-colors"
-                            title="Download"
-                          >
+                          <button onClick={() => handleDownloadAttachment(att.fileUrl, att.fileName)} className="p-0.5 sm:p-1.5 hover:bg-emerald-50 rounded-full transition-colors" title="Download">
                             <FiDownload className="w-2.5 h-2.5 sm:w-4 sm:h-4 text-emerald-600 hover:scale-110 transition-transform" />
                           </button>
                         </div>
@@ -2270,7 +2056,6 @@ function MyTasks() {
                 </div>
               )}
 
-              {/* ─── Remark ─── */}
               {viewTask.remark && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
@@ -2283,40 +2068,50 @@ function MyTasks() {
                 </div>
               )}
 
-              {/* ─── Voice Note ─── */}
               {viewTask.voiceNote && (
                 <div className="mb-2 sm:mb-4">
                   <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
                     <FiMic className="w-3 h-3 sm:w-4 sm:h-4" />
                     Voice Note
                   </h4>
-                  <audio controls src={viewTask.voiceNote} className="w-full" />
-                </div>
-              )}
-
-              {/* ─── Created By ─── */}
-              {viewTask.createdBy && (
-                <div className="mb-2 sm:mb-4">
-                  <h4 className="text-[10px] sm:text-sm font-semibold text-gray-700 mb-0.5 sm:mb-1.5 flex items-center gap-1 sm:gap-2">
-                    <FiUser className="w-3 h-3 sm:w-4 sm:h-4" />
-                    Created By
-                  </h4>
-                  <div className="flex items-center gap-1.5 sm:gap-3 bg-white/40 backdrop-blur-sm rounded-xl p-2 sm:p-4 border border-white/30">
-                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white text-[10px] sm:text-sm font-bold">
-                      {getInitials(viewTask.createdBy.name || viewTask.createdBy.fullName)}
-                    </div>
-                    <div>
-                      <p className="text-[10px] sm:text-sm font-semibold text-gray-800">{viewTask.createdBy.name || viewTask.createdBy.fullName}</p>
-                      <p className="text-[8px] sm:text-xs text-gray-500">{viewTask.createdBy.email}</p>
-                      {viewTask.createdBy.employeeId && (
-                        <p className="text-[6px] sm:text-[10px] text-gray-400">ID: {viewTask.createdBy.employeeId}</p>
-                      )}
-                    </div>
+                  <div className="bg-white/30 backdrop-blur-sm rounded-lg p-2 sm:p-3 border border-white/30">
+                    <audio 
+                      controls 
+                      src={`${BASE_URL}/${viewTask.voiceNote}`}
+                      className="w-full"
+                      onError={(e) => {
+                        console.error('Audio error:', e);
+                        const parent = e.target.parentElement;
+                        const fileName = viewTask.voiceNote.split('/').pop();
+                        parent.innerHTML = `
+                          <div class="text-xs text-amber-600 flex flex-col items-center gap-2 p-3 bg-amber-50/50 rounded-lg">
+                            <div class="flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                              </svg>
+                              <span class="font-medium">Unable to load voice note</span>
+                            </div>
+                            <p class="text-[10px] text-gray-500">File: ${fileName}</p>
+                            <div class="flex gap-2 mt-1">
+                              <button onclick="window.open('${BASE_URL}/${viewTask.voiceNote}', '_blank')" 
+                                class="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs hover:bg-indigo-200 transition-colors">
+                                Open in New Tab
+                              </button>
+                              <button onclick="window.location.href='${BASE_URL}/${viewTask.voiceNote}'" 
+                                class="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-xs hover:bg-emerald-200 transition-colors">
+                                Download
+                              </button>
+                            </div>
+                          </div>
+                        `;
+                      }}
+                    />
                   </div>
                 </div>
               )}
 
-              {/* ─── Footer Buttons ─── */}
               <div className="flex flex-col-reverse sm:flex-row justify-end gap-1.5 sm:gap-3 mt-3 sm:mt-6 pt-2 sm:pt-4 border-t border-gray-100/50">
                 <button onClick={() => { setShowViewModal(false); setViewTask(null); }} className="px-2 sm:px-4 py-1 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-gray-700 font-medium hover:bg-gray-200 transition-all text-[10px] sm:text-sm">
                   Close
@@ -2515,7 +2310,6 @@ function MyTasks() {
         @keyframes slideDown { from { opacity: 0; transform: translateY(-30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pulse-slow { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-        
         @keyframes popBounce {
           0% { opacity: 0; transform: scale(0.2) translateY(-30px) rotate(-5deg); }
           40% { opacity: 1; transform: scale(1.1) translateY(0) rotate(2deg); }
@@ -2523,7 +2317,6 @@ function MyTasks() {
           80% { transform: scale(1.02) translateY(2px) rotate(0.5deg); }
           100% { transform: scale(1) translateY(0) rotate(0deg); }
         }
-        
         @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-8px) rotate(8deg); } }
         @keyframes sparkle { 0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.8; } 50% { transform: scale(1.3) rotate(45deg); opacity: 1; } }
         @keyframes bounce { 0%, 100% { transform: translateY(0); opacity: 0.5; } 50% { transform: translateY(-6px); opacity: 1; } }
@@ -2551,4 +2344,4 @@ function MyTasks() {
   );
 }
 
-export default MyTasks;
+export default MyTodayTasks;

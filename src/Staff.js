@@ -135,60 +135,57 @@ function Staff() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30">
       <div className="flex flex-col lg:flex-row">
-        {/* ─── Mobile Menu Toggle ─── */}
-        <div className="lg:hidden fixed top-2 left-2 z-50">
-          <button
-            onClick={toggleMobileMenu}
-            className="p-1.5 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/30 hover:bg-white transition-all hover:scale-105"
-            aria-label="Toggle menu"
-          >
-            {mobileMenuOpen ? (
-              <FiX className="w-4 h-4 text-gray-700" />
-            ) : (
-              <FiMenu className="w-4 h-4 text-gray-700" />
-            )}
-          </button>
+        {/* ─── Fixed Sidebar ─── */}
+        <div className="fixed top-0 left-0 h-full z-40" style={{ width: '280px' }}>
+          <Sidebar userRole={userRole} />
         </div>
 
         {/* ─── Mobile Overlay ─── */}
         <div 
           className={`
-            fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-all duration-300 lg:hidden
+            fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-all duration-300 lg:hidden
             ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
           `} 
           onClick={() => setMobileMenuOpen(false)}
         />
 
-        {/* ─── Sidebar ─── */}
+        {/* ─── Mobile Menu Toggle ─── */}
+        <div className="lg:hidden fixed top-3 left-3 z-50">
+          <button
+            onClick={toggleMobileMenu}
+            className="p-2 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/30 hover:bg-white transition-all hover:scale-105"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? (
+              <FiX className="w-5 h-5 text-gray-700" />
+            ) : (
+              <FiMenu className="w-5 h-5 text-gray-700" />
+            )}
+          </button>
+        </div>
+
+        {/* ─── Mobile Sidebar ─── */}
         <div 
           className={`
-            fixed top-0 left-0 h-full z-40 transition-all duration-300 ease-in-out
+            fixed top-0 left-0 h-full z-40 transition-all duration-300 ease-in-out lg:hidden
             ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-            lg:translate-x-0 lg:fixed
           `}
           style={{ width: '280px' }}
         >
           <Sidebar userRole={userRole} />
-          <button
-            onClick={() => setMobileMenuOpen(false)}
-            className="lg:hidden absolute top-2 right-2 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-            aria-label="Close menu"
-          >
-            <FiX className="w-4 h-4 text-white" />
-          </button>
         </div>
 
         {/* ─── Main Content ─── */}
-        <div className="flex-1 min-h-screen w-full lg:pl-[280px] overflow-y-auto">
-          {/* Navbar */}
+        <div className="flex-1 min-h-screen w-full lg:pl-[280px]">
+          {/* ─── Fixed Navbar ─── */}
           <nav className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-white/30 shadow-sm">
             <div className="flex flex-wrap items-center justify-between px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-3 lg:py-4 gap-2">
-              <div className="flex items-center gap-2 sm:gap-3 ml-10 lg:ml-0">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30 flex-shrink-0">
                   <FaTasks className="text-white w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <h2 className="text-sm sm:text-base md:text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent hidden xs:block">
-                  Staff Management
+                  Employee Management
                 </h2>
                 <h2 className="text-xs sm:text-sm font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent xs:hidden">
                   Staff
@@ -215,13 +212,13 @@ function Staff() {
             </div>
           </nav>
 
-          {/* Main Content */}
-          <div className="p-3 sm:p-4 md:p-6 lg:p-8">
+          {/* ─── Scrollable Content ─── */}
+          <div className="p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto" style={{ height: 'calc(100vh - 80px)' }}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6 lg:mb-8">
               <div>
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent flex items-center gap-2 sm:gap-3">
                   <FiUsers className="w-5 h-5 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-indigo-500" />
-                  Staff Management
+                  Employee Management
                 </h1>
                 <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">View and manage your team members</p>
               </div>
@@ -242,7 +239,7 @@ function Staff() {
                     <FiUsers className="text-white w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
                   </div>
                   <div>
-                    <p className="text-[8px] sm:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider">Total Staff</p>
+                    <p className="text-[8px] sm:text-[10px] lg:text-xs font-medium text-gray-500 uppercase tracking-wider">Total Employee</p>
                     <p className="text-sm sm:text-base lg:text-2xl font-bold text-gray-800">{employees.length}</p>
                   </div>
                 </div>
@@ -324,7 +321,7 @@ function Staff() {
                   <FiUsers className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-indigo-400" />
                 </div>
                 <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-700">No employees found</h3>
-                <p className="text-xs sm:text-sm text-gray-400 mt-1">No staff members available</p>
+                <p className="text-xs sm:text-sm text-gray-400 mt-1">No employee members available</p>
               </div>
             )}
 

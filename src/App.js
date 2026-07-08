@@ -17,6 +17,8 @@ import CreateTask from './pages/CreateTask';
 import AdminPendingTask from './pages/AdminPendingTask';
 import AdminProgressTask from './pages/AdminProgressTask';
 import AdminCompletedTask from './pages/AdminCompletedTask';
+import MyTodayTasks from './pages/MyTodayTasks';
+
 function App() {
   return (
     <Router>
@@ -31,6 +33,7 @@ function App() {
           <Route path="/my-createdtask" element={<MyCreatedTasks />} />
           <Route path="/create-task" element={<CreateTask />} />
           <Route path="/my-issues" element={<MyIssues />} />
+          <Route path="/my-today-tasks" element={<MyTodayTasks />} />
            <Route path="/my-notifications" element={<MyNotifications />} />
           <Route path="/employee-profile" element={<MyProfile />} />
           <Route path="/issues" element={<Issues />} />

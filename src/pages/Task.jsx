@@ -53,13 +53,16 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiRepeat,
-  FiCalendar as FiCalendarIcon
+  FiCalendar as FiCalendarIcon,
+  FiUserCheck,
+  FiUserX
 } from 'react-icons/fi';
 import { 
   FaTasks, 
   FaRocket,
   FaCheck,
-  FaList
+  FaList,
+  FaWhatsapp
 } from 'react-icons/fa';
 import Sidebar from '../Sidebar';
 import '../Sidebar.css';
@@ -928,20 +931,473 @@ const ViewTaskModal = ({
 }) => {
   if (!selectedTask) return null;
 
-  const getEmployeeDetails = (id) => employees.find((e) => e._id === id);
+  // ─── Generate Report Function ───
+  const generateReport = () => {
+    const task = selectedTask;
+    
+    // ─── ✅ FIX: Safely get assignedTo as array ───
+    const assignedToArray = Array.isArray(task.assignedTo) ? task.assignedTo : [];
+    
+    // ─── ✅ FIX: Safely get employeeSubtaskProgress as object ───
+    const employeeSubtaskProgress = task.employeeSubtaskProgress || {};
+    
+    // ─── ✅ FIX: Safely get subtasks as array ───
+    const subtasksArray = Array.isArray(task.subtasks) ? task.subtasks : [];
+    
+    // ─── ✅ FIX: Safely get employeeUpdates as array ───
+    const employeeUpdatesArray = Array.isArray(task.employeeUpdates) ? task.employeeUpdates : [];
+    
+    // ─── ✅ FIX: Safely get expenses as array ───
+    const expensesArray = Array.isArray(task.expenses) ? task.expenses : [];
+    
+    // ─── ✅ FIX: Safely get attachments as array ───
+    const attachmentsArray = Array.isArray(task.attachments) ? task.attachments : [];
+    
+    // ─── ✅ FIX: Safely get reportedIssues as array ───
+    const reportedIssuesArray = Array.isArray(task.reportedIssues) ? task.reportedIssues : [];
+
+    const reportData = {
+      taskName: task.taskName || 'N/A',
+      title: task.title || 'N/A',
+      description: task.description || 'N/A',
+      status: task.status || 'N/A',
+      priority: task.priority || 'N/A',
+      progress: task.progress || 0,
+      submitDate: task.submitDate ? new Date(task.submitDate).toLocaleString() : 'N/A',
+      createdAt: task.createdAt ? new Date(task.createdAt).toLocaleString() : 'N/A',
+      updatedAt: task.updatedAt ? new Date(task.updatedAt).toLocaleString() : 'N/A',
+      department: task.department?.name || task.department || 'N/A',
+      frequency: Array.isArray(task.frequency) ? task.frequency.join(', ') : 'N/A',
+      remark: task.remark || 'N/A',
+      createdBy: task.createdBy?.name || 'Unknown',
+      createdByEmail: task.createdBy?.email || 'N/A',
+      assignedTo: assignedToArray,
+      subtasks: subtasksArray,
+      employeeUpdates: employeeUpdatesArray,
+      expenses: expensesArray,
+      attachments: attachmentsArray,
+      reportedIssues: reportedIssuesArray,
+      employeeSubtaskProgress: employeeSubtaskProgress
+    };
+
+    const getStatusClass = (status) => {
+      const classes = {
+        'Pending': 'status-pending',
+        'In Progress': 'status-progress',
+        'Completed': 'status-completed',
+        'Rejected': 'status-rejected',
+        'Overdue': 'status-overdue'
+      };
+      return classes[status] || 'status-pending';
+    };
+
+    const getChipClass = (status) => {
+      const classes = {
+        'Pending': 'chip-pending',
+        'In Progress': 'chip-progress',
+        'Completed': 'chip-completed',
+        'Low': 'chip-low',
+        'Medium': 'chip-medium',
+        'High': 'chip-high',
+        'Critical': 'chip-critical'
+      };
+      return classes[status] || 'chip-pending';
+    };
+
+    // Create HTML report
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Task Report - ${reportData.taskName}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; background: #f8f9fa; }
+          .container { max-width: 1000px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+          .header { border-bottom: 3px solid #6366f1; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+          .header h1 { color: #1e293b; margin: 0; font-size: 24px; }
+          .header .badge { background: #6366f1; color: white; padding: 6px 16px; border-radius: 20px; font-size: 14px; }
+          .section { margin-bottom: 25px; }
+          .section h2 { color: #334155; font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+          .field { padding: 8px 0; }
+          .field-label { font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+          .field-value { color: #1e293b; font-size: 14px; margin-top: 2px; }
+          .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+          .status-completed { background: #d1fae5; color: #065f46; }
+          .status-progress { background: #dbeafe; color: #1e40af; }
+          .status-pending { background: #fef3c7; color: #92400e; }
+          .status-overdue { background: #fecaca; color: #991b1b; }
+          .status-rejected { background: #f3e8ff; color: #6d28d9; }
+          .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          .table th { background: #f1f5f9; padding: 10px; text-align: left; font-size: 12px; text-transform: uppercase; font-weight: 600; color: #475569; }
+          .table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+          .table tr:hover { background: #f8fafc; }
+          .footer { margin-top: 30px; padding-top: 20px; border-top: 2px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 12px; }
+          .progress-bar { width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+          .progress-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 4px; }
+          .chip { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; margin: 2px; }
+          .chip-pending { background: #fef3c7; color: #92400e; }
+          .chip-completed { background: #d1fae5; color: #065f46; }
+          .chip-progress { background: #dbeafe; color: #1e40af; }
+          .chip-low { background: #d1fae5; color: #065f46; }
+          .chip-medium { background: #fef3c7; color: #92400e; }
+          .chip-high { background: #ffedd5; color: #9a3412; }
+          .chip-critical { background: #fecaca; color: #991b1b; }
+          .on-time { background: #d1fae5; color: #065f46; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+          .late { background: #fecaca; color: #991b1b; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+          @media print { body { padding: 20px; } .no-print { display: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div>
+              <h1>📋 ${reportData.taskName}</h1>
+              <div style="margin-top: 8px; color: #64748b; font-size: 14px;">${reportData.title}</div>
+            </div>
+            <div>
+              <span class="badge">${reportData.status}</span>
+            </div>
+          </div>
+
+          <!-- Overview -->
+          <div class="section">
+            <h2>📊 Overview</h2>
+            <div class="grid">
+              <div class="field">
+                <div class="field-label">Priority</div>
+                <div class="field-value">
+                  <span class="chip chip-${reportData.priority.toLowerCase()}">${reportData.priority}</span>
+                </div>
+              </div>
+              <div class="field">
+                <div class="field-label">Status</div>
+                <div class="field-value">
+                  <span class="status-badge ${getStatusClass(reportData.status)}">${reportData.status}</span>
+                </div>
+              </div>
+              <div class="field">
+                <div class="field-label">Progress</div>
+                <div class="field-value">
+                  ${reportData.progress}%
+                  <div class="progress-bar"><div class="progress-fill" style="width: ${reportData.progress}%"></div></div>
+                </div>
+              </div>
+              <div class="field">
+                <div class="field-label">Department</div>
+                <div class="field-value">${reportData.department}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">Frequency</div>
+                <div class="field-value">${reportData.frequency}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">Submit Date</div>
+                <div class="field-value">${reportData.submitDate}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div class="section">
+            <h2>📝 Description</h2>
+            <p style="color: #334155; font-size: 14px; line-height: 1.6;">${reportData.description}</p>
+            ${reportData.remark !== 'N/A' ? `<div style="margin-top: 8px; padding: 12px; background: #f1f5f9; border-radius: 8px;"><strong>Remark:</strong> ${reportData.remark}</div>` : ''}
+          </div>
+
+          <!-- Created & Assigned -->
+          <div class="section">
+            <h2>👥 People</h2>
+            <div class="grid">
+              <div class="field">
+                <div class="field-label">Created By</div>
+                <div class="field-value">${reportData.createdBy} (${reportData.createdByEmail})</div>
+              </div>
+              <div class="field">
+                <div class="field-label">Assigned To</div>
+                <div class="field-value">${reportData.assignedTo.map(emp => emp.name || 'Unknown').join(', ')}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subtasks -->
+          ${reportData.subtasks.length > 0 ? `
+          <div class="section">
+            <h2>📌 Subtasks (${reportData.subtasks.length})</h2>
+            <table class="table">
+              <thead><tr><th>Name</th><th>Status</th><th>Priority</th><th>Submit Date</th><th>Submitted Date</th><th>On Time?</th></tr></thead>
+              <tbody>
+                ${reportData.subtasks.map(s => {
+                  const isOnTime = s.submitDate && s.submittedDate ? new Date(s.submittedDate) <= new Date(s.submitDate) : null;
+                  return `
+                    <tr>
+                      <td>${s.name}</td>
+                      <td><span class="chip ${getChipClass(s.status)}">${s.status || 'Pending'}</span></td>
+                      <td><span class="chip chip-${s.priority?.toLowerCase() || 'medium'}">${s.priority || 'Medium'}</span></td>
+                      <td>${s.submitDate ? new Date(s.submitDate).toLocaleString() : 'N/A'}</td>
+                      <td>${s.submittedDate ? new Date(s.submittedDate).toLocaleString() : 'Not submitted'}</td>
+                      <td>${isOnTime === true ? '<span class="on-time">✅ On Time</span>' : isOnTime === false ? '<span class="late">❌ Late</span>' : 'N/A'}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Employee Updates -->
+          ${reportData.employeeUpdates.length > 0 ? `
+          <div class="section">
+            <h2>🔄 Employee Updates (${reportData.employeeUpdates.length})</h2>
+            <table class="table">
+              <thead><tr><th>Employee</th><th>Update</th><th>Progress</th><th>Date</th><th>On Time?</th></tr></thead>
+              <tbody>
+                ${reportData.employeeUpdates.map(u => {
+                  const isOnTime = reportData.submitDate !== 'N/A' && u.updatedAt ? new Date(u.updatedAt) <= new Date(reportData.submitDate) : null;
+                  return `
+                    <tr>
+                      <td>${u.employeeId?.name || 'Unknown'}</td>
+                      <td>${u.updateText || 'N/A'}</td>
+                      <td>${u.progress}%</td>
+                      <td>${u.updatedAt ? new Date(u.updatedAt).toLocaleString() : 'N/A'}</td>
+                      <td>${isOnTime === true ? '<span class="on-time">✅ On Time</span>' : isOnTime === false ? '<span class="late">❌ Late</span>' : 'N/A'}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Expenses -->
+          ${reportData.expenses.length > 0 ? `
+          <div class="section">
+            <h2>💰 Expenses (${reportData.expenses.length})</h2>
+            <table class="table">
+              <thead><tr><th>Amount</th><th>Description</th><th>Distance</th><th>Location</th><th>Added By</th></tr></thead>
+              <tbody>
+                ${reportData.expenses.map(e => `
+                  <tr>
+                    <td>₹${e.expenseAmount}</td>
+                    <td>${e.description || 'N/A'}</td>
+                    <td>${e.distance || 0} km</td>
+                    <td>${e.location?.address || 'N/A'}</td>
+                    <td>${e.addedBy?.name || 'Unknown'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <div style="margin-top: 12px; padding: 12px; background: #f1f5f9; border-radius: 8px; font-weight: 600;">
+              Total: ₹${reportData.expenses.reduce((sum, e) => sum + (e.expenseAmount || 0), 0)}
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- Attachments -->
+          ${reportData.attachments.length > 0 ? `
+          <div class="section">
+            <h2>📎 Attachments (${reportData.attachments.length})</h2>
+            <table class="table">
+              <thead><tr><th>File Name</th><th>Uploaded At</th></tr></thead>
+              <tbody>
+                ${reportData.attachments.map(a => `
+                  <tr>
+                    <td>${a.fileName || 'N/A'}</td>
+                    <td>${a.uploadedAt ? new Date(a.uploadedAt).toLocaleString() : 'N/A'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Reported Issues -->
+          ${reportData.reportedIssues.length > 0 ? `
+          <div class="section">
+            <h2>⚠️ Reported Issues (${reportData.reportedIssues.length})</h2>
+            <table class="table">
+              <thead><tr><th>Title</th><th>Description</th><th>Priority</th><th>Status</th></tr></thead>
+              <tbody>
+                ${reportData.reportedIssues.map(i => `
+                  <tr>
+                    <td>${i.issueTitle || 'N/A'}</td>
+                    <td>${i.issueDescription || 'N/A'}</td>
+                    <td><span class="chip chip-${i.priority?.toLowerCase() || 'medium'}">${i.priority || 'Medium'}</span></td>
+                    <td>${i.status || 'Open'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Employee Subtask Progress -->
+          ${Object.keys(reportData.employeeSubtaskProgress).length > 0 ? `
+          <div class="section">
+            <h2>📊 Employee Subtask Progress</h2>
+            <table class="table">
+              <thead><tr><th>Employee</th><th>Progress</th><th>Subtask Status</th></tr></thead>
+              <tbody>
+                ${Object.keys(reportData.employeeSubtaskProgress).map(empId => {
+                  const empData = reportData.employeeSubtaskProgress[empId];
+                  const empName = reportData.assignedTo.find(e => e._id === empId)?.name || empId;
+                  return `
+                    <tr>
+                      <td>${empName}</td>
+                      <td>
+                        ${empData.progress || 0}%
+                        <div class="progress-bar"><div class="progress-fill" style="width: ${empData.progress || 0}%"></div></div>
+                      </td>
+                      <td>
+                        ${Object.keys(empData.subtaskStatus || {}).map(sId => {
+                          const status = empData.subtaskStatus[sId];
+                          return `<span class="chip ${getChipClass(status.status)}">${status.status || 'Pending'}</span>`;
+                        }).join(' ') || 'No subtasks'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Metadata -->
+          <div class="section">
+            <h2>📅 Metadata</h2>
+            <div class="grid">
+              <div class="field">
+                <div class="field-label">Created At</div>
+                <div class="field-value">${reportData.createdAt}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">Last Updated</div>
+                <div class="field-value">${reportData.updatedAt}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>Report generated on ${new Date().toLocaleString()}</p>
+            <p style="font-size: 11px; color: #94a3b8;">Task ID: ${task._id}</p>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 20px;" class="no-print">
+          <button onclick="window.print()" style="padding: 12px 32px; background: #6366f1; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 0 10px;">
+            🖨️ Print / Save as PDF
+          </button>
+          <button onclick="window.close()" style="padding: 12px 32px; background: #e2e8f0; color: #334155; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 0 10px;">
+            ❌ Close
+          </button>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Open in new window for printing/saving as PDF
+    const win = window.open('', '_blank', 'width=1000,height=800');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+    } else {
+      alert('Please allow popups to generate report');
+    }
+  };
+
+  const getEmployeeDetails = (id) => {
+    if (!id) return null;
+    if (Array.isArray(employees)) {
+      return employees.find((e) => e._id === id);
+    }
+    return null;
+  };
 
   const getAssignedUsers = () => {
     if (!selectedTask.assignedTo) return [];
+    if (!Array.isArray(selectedTask.assignedTo)) return [];
     return selectedTask.assignedTo.map((emp) => {
       if (typeof emp === 'object' && emp._id) return emp;
-      return getEmployeeDetails(emp) || { _id: emp, name: 'Unknown', email: 'N/A' };
+      const found = getEmployeeDetails(emp);
+      return found || { _id: emp, name: 'Unknown', email: 'N/A' };
     });
   };
 
   const assignedUsers = getAssignedUsers();
-  const employeeUpdates = selectedTask.employeeUpdates || [];
-  const reportedIssues = selectedTask.reportedIssues || [];
-  const subtasks = selectedTask.subtasks || [];
+  const employeeUpdates = Array.isArray(selectedTask.employeeUpdates) ? selectedTask.employeeUpdates : [];
+  const reportedIssues = Array.isArray(selectedTask.reportedIssues) ? selectedTask.reportedIssues : [];
+  const subtasks = Array.isArray(selectedTask.subtasks) ? selectedTask.subtasks : [];
+
+  const getCreatedByDetails = () => {
+    const createdBy = selectedTask.createdBy;
+    if (!createdBy) return null;
+    if (typeof createdBy === 'object' && createdBy !== null) {
+      return createdBy;
+    }
+    if (typeof createdBy === 'string') {
+      return getEmployeeDetails(createdBy) || { _id: createdBy, name: 'Unknown', email: 'N/A' };
+    }
+    return null;
+  };
+
+  const createdByUser = getCreatedByDetails();
+
+  // ─── Check if submitted on time ───
+  const isSubmittedOnTime = (submitDate, submittedDate) => {
+    if (!submitDate || !submittedDate) return null;
+    const submit = new Date(submitDate);
+    const submitted = new Date(submittedDate);
+    return submitted <= submit;
+  };
+
+  // ─── Check if update was on time ───
+  const isUpdateOnTime = (updatedAt) => {
+    if (!selectedTask.submitDate || !updatedAt) return null;
+    const submitDate = new Date(selectedTask.submitDate);
+    const updateDate = new Date(updatedAt);
+    return updateDate <= submitDate;
+  };
+
+  // ─── Get time difference display ───
+  const getTimeDifferenceDisplay = (date) => {
+    if (!selectedTask.submitDate || !date) return null;
+    const submitDate = new Date(selectedTask.submitDate);
+    const checkDate = new Date(date);
+    const diffMs = submitDate - checkDate;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffMs < 0) {
+      const lateHours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+      const lateMinutes = Math.floor((Math.abs(diffMs) % (1000 * 60 * 60)) / (1000 * 60));
+      return {
+        type: 'late',
+        text: `Late by ${lateHours}h ${lateMinutes}m`
+      };
+    } else if (diffMs > 0) {
+      return {
+        type: 'early',
+        text: `${diffHours}h ${diffMinutes}m before deadline`
+      };
+    }
+    return {
+      type: 'on-time',
+      text: 'Exactly on time'
+    };
+  };
+
+  const handleWhatsAppClick = (phoneNumber) => {
+    if (!phoneNumber) return;
+    const cleanNumber = phoneNumber.replace(/\D/g, '');
+    let number = cleanNumber;
+    if (!number.startsWith('91') && number.length === 10) {
+      number = '91' + number;
+    }
+    const whatsappUrl = `https://wa.me/${number}`;
+    window.open(whatsappUrl, '_blank');
+  };
 
   const getFileIcon = (fileName) => {
     if (!fileName) return <FiFile className="w-3.5 h-3.5 sm:w-4 sm:h-4" />;
@@ -1004,34 +1460,104 @@ const ViewTaskModal = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 animate-slideDown">
-        <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-4 sm:px-8 py-3 sm:py-5 border-b border-gray-100/50 flex justify-between items-center">
+        <div className="sticky top-0 bg-white/95 backdrop-blur-xl rounded-t-2xl sm:rounded-t-3xl px-4 sm:px-8 py-3 sm:py-5 border-b border-gray-100/50 flex justify-between items-center z-10">
           <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-1.5 sm:gap-2">
             <FiEye className="w-4 h-4 sm:w-6 sm:h-6" />
             Task Details
           </h2>
-          <button
-            onClick={() => { setShowViewModal(false); setSelectedTask(null); }}
-            className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-          >
-            <FiX className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={generateReport}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-xs sm:text-sm font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all hover:scale-105 flex items-center gap-1.5 sm:gap-2"
+              title="Download Report (PDF)"
+            >
+              <FiDownload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Report</span>
+            </button>
+            <button
+              onClick={() => { setShowViewModal(false); setSelectedTask(null); }}
+              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <FiX className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" />
+            </button>
+          </div>
         </div>
 
         <div className="px-4 sm:px-8 py-4 sm:py-6">
+          {/* ─── Created By Info Section with WhatsApp ─── */}
+          <div className="bg-gradient-to-r from-indigo-50/80 to-purple-50/80 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-indigo-200/50 mb-4 sm:mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg ${
+                  selectedTask.createdByType === 'admin' 
+                    ? 'bg-gradient-to-r from-indigo-500 to-purple-500 shadow-indigo-500/30' 
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/30'
+                }`}>
+                  {createdByUser && createdByUser.name ? createdByUser.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-semibold text-gray-800">
+                    {createdByUser && createdByUser.name ? createdByUser.name : 'Unknown User'}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs">
+                    <span className="text-gray-500">
+                      {createdByUser && createdByUser.email ? createdByUser.email : 'N/A'}
+                    </span>
+                    {createdByUser && createdByUser.phone && (
+                      <button
+                        onClick={() => handleWhatsAppClick(createdByUser.phone)}
+                        className="inline-flex items-center gap-0.5 px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors text-[8px] sm:text-[10px] font-medium"
+                        title="Chat on WhatsApp"
+                      >
+                        <FaWhatsapp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                        {createdByUser.phone}
+                      </button>
+                    )}
+                    <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[10px] font-medium ${
+                      selectedTask.createdByType === 'admin' 
+                        ? 'bg-indigo-100 text-indigo-700' 
+                        : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      {selectedTask.createdByType === 'admin' ? (
+                        <><FiUserCheck className="inline mr-0.5 w-2.5 h-2.5" /> Admin</>
+                      ) : (
+                        <><FiUser className="inline mr-0.5 w-2.5 h-2.5" /> Employee</>
+                      )}
+                    </span>
+                    <span className="text-gray-400 text-[8px] sm:text-[10px]">
+                      Created: {formatDateTime(selectedTask.createdAt)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {selectedTask.department && (
+                <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-white/60 backdrop-blur-sm rounded-full text-[10px] sm:text-xs text-gray-600 border border-gray-200/50 flex items-center gap-0.5 sm:gap-1">
+                  <FiBriefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  {typeof selectedTask.department === 'object' ? selectedTask.department.name : selectedTask.department}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* ─── Frequency Display ─── */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {selectedTask.frequency && selectedTask.frequency.length > 0 ? (
+              selectedTask.frequency.map((freq, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 rounded-full text-[10px] sm:text-xs font-medium border border-indigo-200/50">
+                  <FiRepeat className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  {freq}
+                </span>
+              ))
+            ) : (
+              <span className="text-xs text-gray-400">No frequency set</span>
+            )}
+          </div>
+
+          {/* ─── Task Header ─── */}
           <div className="flex flex-col sm:flex-row justify-between items-start gap-2 sm:gap-0 mb-4 sm:mb-6">
             <div className="w-full sm:w-auto">
               <h3 className="text-base sm:text-xl font-bold text-gray-800">{selectedTask.taskName}</h3>
               <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">{selectedTask.title}</p>
-              {selectedTask.frequency && selectedTask.frequency.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {selectedTask.frequency.map((freq, idx) => (
-                    <span key={idx} className="inline-flex items-center gap-0.5 px-1.5 sm:px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[8px] sm:text-xs font-medium">
-                      <FiRepeat className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                      {freq}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
             <div className="flex flex-wrap gap-1.5 sm:gap-2">
               <span className={`inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${getPriorityStyles(selectedTask.priority)}`}>
@@ -1045,6 +1571,7 @@ const ViewTaskModal = ({
             </div>
           </div>
 
+          {/* ─── Description ─── */}
           <div className="mb-4 sm:mb-6">
             <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
               <FiMessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -1055,18 +1582,49 @@ const ViewTaskModal = ({
             </p>
           </div>
 
-          {selectedTask.submitDate && (
-            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-500 mb-0.5 sm:mb-1">
-                <FiCalendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Submit Date & Time
+          {/* ─── Submit Date with On-Time Status ─── */}
+          <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
+            <div className="flex items-center justify-between flex-wrap gap-1 sm:gap-2">
+              <div>
+                <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-500 mb-0.5 sm:mb-1">
+                  <FiCalendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Submit Date & Time
+                </div>
+                <p className="text-xs sm:text-sm font-medium text-gray-800">
+                  {formatDateTime(selectedTask.submitDate)}
+                </p>
               </div>
-              <p className="text-xs sm:text-sm font-medium text-gray-800">
-                {formatDateTime(selectedTask.submitDate)}
-              </p>
+              {selectedTask.submittedDate && (
+                <div className="text-right">
+                  <div className="text-[10px] sm:text-xs text-gray-500">Submitted On</div>
+                  <p className="text-xs sm:text-sm font-medium">
+                    {formatDateTime(selectedTask.submittedDate)}
+                  </p>
+                  <span className={`inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                    isSubmittedOnTime(selectedTask.submitDate, selectedTask.submittedDate) 
+                      ? 'bg-emerald-100 text-emerald-700' 
+                      : 'bg-rose-100 text-rose-700'
+                  }`}>
+                    {isSubmittedOnTime(selectedTask.submitDate, selectedTask.submittedDate) 
+                      ? <><FiCheckCircle className="w-3 h-3" /> On Time</>
+                      : <><FiAlertCircle className="w-3 h-3" /> Late</>
+                    }
+                  </span>
+                  {selectedTask.submitDate && selectedTask.submittedDate && (
+                    <div className="text-[8px] sm:text-[10px] text-gray-400 mt-0.5">
+                      {(() => {
+                        const diff = getTimeDifferenceDisplay(selectedTask.submittedDate);
+                        if (diff) return diff.text;
+                        return null;
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
+          {/* ─── Subtasks ─── */}
           {subtasks.length > 0 && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
@@ -1077,52 +1635,64 @@ const ViewTaskModal = ({
                 </span>
               </h4>
               <div className="space-y-1.5 sm:space-y-2 max-h-48 sm:max-h-60 overflow-y-auto">
-                {subtasks.map((subtask, idx) => (
-                  <div key={idx} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white/30 backdrop-blur-sm rounded-lg border border-white/30 hover:bg-white/50 transition-all">
-                    <div className="flex-shrink-0">
-                      {getSubtaskStatusIcon(subtask.status)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-                        <span className="text-xs sm:text-sm font-medium text-gray-800 truncate">{subtask.name}</span>
-                        <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-medium ${
-                          subtask.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
-                          subtask.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
-                          'bg-amber-100 text-amber-700'
-                        }`}>
-                          {subtask.status || 'Pending'}
-                        </span>
-                        <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-medium ${
-                          subtask.priority === 'Critical' ? 'bg-rose-100 text-rose-700' :
-                          subtask.priority === 'High' ? 'bg-orange-100 text-orange-700' :
-                          subtask.priority === 'Medium' ? 'bg-amber-100 text-amber-700' :
-                          'bg-emerald-100 text-emerald-700'
-                        }`}>
-                          {subtask.priority || 'Medium'}
-                        </span>
-                        {subtask.status === 'Completed' && subtask.submittedDate && (
-                          <span className="text-[8px] sm:text-[10px] text-emerald-600 flex items-center gap-0.5">
-                            <FiCheckCircle className="w-2.5 h-2.5" />
-                            Done: {formatDateTime(subtask.submittedDate)}
+                {subtasks.map((subtask, idx) => {
+                  const onTime = isSubmittedOnTime(subtask.submitDate, subtask.submittedDate);
+                  const diff = subtask.submitDate && subtask.submittedDate ? getTimeDifferenceDisplay(subtask.submittedDate) : null;
+                  return (
+                    <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white/30 backdrop-blur-sm rounded-lg border border-white/30 hover:bg-white/50 transition-all">
+                      <div className="flex-shrink-0">
+                        {getSubtaskStatusIcon(subtask.status)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                          <span className="text-xs sm:text-sm font-medium text-gray-800 truncate">{subtask.name}</span>
+                          <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-medium ${
+                            subtask.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
+                            subtask.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {subtask.status || 'Pending'}
                           </span>
+                          <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-medium ${
+                            subtask.priority === 'Critical' ? 'bg-rose-100 text-rose-700' :
+                            subtask.priority === 'High' ? 'bg-orange-100 text-orange-700' :
+                            subtask.priority === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                            'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {subtask.priority || 'Medium'}
+                          </span>
+                          {onTime !== null && (
+                            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-semibold ${
+                              onTime ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                            }`}>
+                              {onTime ? '✅ On Time' : '❌ Late'}
+                            </span>
+                          )}
+                        </div>
+                        {subtask.description && (
+                          <p className="text-[10px] sm:text-xs text-gray-500 truncate">{subtask.description}</p>
+                        )}
+                        {subtask.submitDate && (
+                          <p className="text-[8px] sm:text-[10px] text-gray-400 flex items-center gap-0.5 mt-0.5">
+                            <FiCalendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                            Submit By: {formatDateTime(subtask.submitDate)}
+                          </p>
+                        )}
+                        {subtask.status === 'Completed' && subtask.submittedDate && (
+                          <p className="text-[8px] sm:text-[10px] text-emerald-600 flex items-center gap-0.5">
+                            ✅ Completed: {formatDateTime(subtask.submittedDate)}
+                            {diff && <span className="text-gray-400 ml-1">({diff.text})</span>}
+                          </p>
                         )}
                       </div>
-                      {subtask.description && (
-                        <p className="text-[10px] sm:text-xs text-gray-500 truncate">{subtask.description}</p>
-                      )}
-                      {subtask.submitDate && (
-                        <p className="text-[8px] sm:text-[10px] text-gray-400 flex items-center gap-0.5 mt-0.5">
-                          <FiCalendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                          Submit By: {formatDateTime(subtask.submitDate)}
-                        </p>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
+          {/* ─── Info Grid ─── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
               <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-500 mb-0.5 sm:mb-1">
@@ -1135,7 +1705,7 @@ const ViewTaskModal = ({
             </div>
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
               <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-500 mb-0.5 sm:mb-1">
-                <FaRocket className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <FiRepeat className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Frequency
               </div>
               <div className="flex flex-wrap gap-1">
@@ -1152,6 +1722,7 @@ const ViewTaskModal = ({
             </div>
           </div>
 
+          {/* ─── Progress ─── */}
           <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
             <div className="flex justify-between items-center mb-1.5 sm:mb-2">
               <span className="text-xs sm:text-sm font-semibold text-gray-700">Progress</span>
@@ -1165,6 +1736,7 @@ const ViewTaskModal = ({
             </div>
           </div>
 
+          {/* ─── Assigned To ─── */}
           <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
             <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
               <FiUsers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -1174,20 +1746,32 @@ const ViewTaskModal = ({
               {assignedUsers.length > 0 ? (
                 assignedUsers.map((user, idx) => (
                   <div key={idx} className="flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 bg-white/30 rounded-lg">
-                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-[10px] sm:text-sm flex-shrink-0">
                       {user.name?.charAt(0) || 'U'}
                     </div>
-                    <div>
-                      <p className="text-xs sm:text-sm font-medium text-gray-800">{user.name || 'Unknown'}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-0.5 sm:gap-1">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-medium text-gray-800 truncate">{user.name || 'Unknown'}</p>
+                      <div className="flex flex-wrap items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-gray-500">
                         <FiMail className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                        {user.email || 'N/A'}
+                        <span className="truncate">{user.email || 'N/A'}</span>
+                        {user.phone && (
+                          <button
+                            onClick={() => handleWhatsAppClick(user.phone)}
+                            className="ml-0.5 sm:ml-1 text-emerald-600 hover:text-emerald-700 transition-colors"
+                            title="Chat on WhatsApp"
+                          >
+                            <FaWhatsapp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                          </button>
+                        )}
                         {user.department && (
-                          <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[8px] sm:text-xs">
+                          <span className="ml-0.5 sm:ml-1 px-1.5 sm:px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[8px] sm:text-[10px]">
                             {user.department}
                           </span>
                         )}
-                      </p>
+                        {user.employeeId && (
+                          <span className="text-[8px] sm:text-[10px] text-gray-400">#{user.employeeId}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))
@@ -1197,37 +1781,99 @@ const ViewTaskModal = ({
             </div>
           </div>
 
+          {/* ─── Employee Updates ─── */}
           {employeeUpdates.length > 0 && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
-              <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
-                <FiRefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Employee Updates ({employeeUpdates.length})
-              </h4>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2 sm:mb-3">
+                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 flex items-center gap-1.5 sm:gap-2">
+                  <FiRefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Employee Updates ({employeeUpdates.length})
+                </h4>
+                <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
+                  <span className="flex items-center gap-0.5">
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500"></span>
+                    On Time
+                  </span>
+                  <span className="flex items-center gap-0.5">
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-rose-500"></span>
+                    Late
+                  </span>
+                </div>
+              </div>
               <div className="space-y-2 sm:space-y-3 max-h-48 sm:max-h-60 overflow-y-auto">
                 {employeeUpdates.map((update, idx) => {
-                  const emp = getEmployeeDetails(update.employeeId) || { name: 'Unknown', email: 'N/A' };
+                  const emp = update.employeeId || { name: 'Unknown', email: 'N/A' };
+                  const onTime = isUpdateOnTime(update.updatedAt);
+                  const diff = update.updatedAt ? getTimeDifferenceDisplay(update.updatedAt) : null;
+                  
                   return (
-                    <div key={idx} className="bg-white/50 backdrop-blur-sm rounded-lg p-2 sm:p-3 border border-white/30">
+                    <div key={idx} className={`bg-white/50 backdrop-blur-sm rounded-lg p-2 sm:p-3 border transition-all hover:shadow-md ${
+                      onTime === true ? 'border-emerald-200/50' : 
+                      onTime === false ? 'border-rose-200/50' : 
+                      'border-white/30'
+                    }`}>
                       <div className="flex flex-wrap items-center justify-between gap-1 sm:gap-2 mb-1 sm:mb-2">
                         <div className="flex items-center gap-1.5 sm:gap-2">
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-r from-indigo-400 to-purple-400 flex items-center justify-center text-white font-bold text-[8px] sm:text-xs">
+                          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-r from-indigo-400 to-purple-400 flex items-center justify-center text-white font-bold text-[8px] sm:text-xs flex-shrink-0">
                             {emp.name?.charAt(0) || 'U'}
                           </div>
-                          <span className="text-xs sm:text-sm font-medium text-gray-800">{emp.name}</span>
+                          <span className="text-xs sm:text-sm font-medium text-gray-800">{emp.name || 'Unknown'}</span>
+                          {emp.employeeId && (
+                            <span className="text-[8px] sm:text-[10px] text-gray-400">#{emp.employeeId}</span>
+                          )}
+                          {emp.email && (
+                            <span className="text-[8px] sm:text-[10px] text-gray-400 hidden sm:inline">({emp.email})</span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1.5 sm:gap-2">
+                        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
                           <span className="text-[10px] sm:text-xs text-gray-500">
                             {update.updatedAt ? formatDateTime(update.updatedAt) : 'N/A'}
                           </span>
                           <span className="px-1.5 sm:px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[8px] sm:text-xs font-medium">
                             {update.progress}%
                           </span>
+                          {onTime !== null ? (
+                            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-semibold flex items-center gap-0.5 sm:gap-1 ${
+                              onTime 
+                                ? 'bg-emerald-100 text-emerald-700' 
+                                : 'bg-rose-100 text-rose-700'
+                            }`}>
+                              {onTime 
+                                ? <><FiCheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> On Time</>
+                                : <><FiAlertCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Late</>
+                              }
+                            </span>
+                          ) : (
+                            <span className="px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-xs font-semibold bg-gray-100 text-gray-500 flex items-center gap-0.5">
+                              <FiClock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> N/A
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <p className="text-xs sm:text-sm text-gray-600">{update.updateText}</p>
-                      {update.remark && (
-                        <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 italic">Remark: {update.remark}</p>
+                      <div className="flex flex-wrap items-start gap-1 sm:gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-gray-600 break-words">{update.updateText}</p>
+                          {update.remark && (
+                            <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 italic">💬 Remark: {update.remark}</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* ─── Time Difference Display ─── */}
+                      {diff && (
+                        <div className="mt-1 sm:mt-1.5">
+                          <span className={`text-[8px] sm:text-[10px] flex items-center gap-0.5 ${
+                            diff.type === 'late' ? 'text-rose-500' : 'text-emerald-600'
+                          }`}>
+                            {diff.type === 'late' 
+                              ? <FiAlertCircle className="w-2.5 h-2.5" />
+                              : <FiCheckCircle className="w-2.5 h-2.5" />
+                            }
+                            {diff.text}
+                          </span>
+                        </div>
                       )}
+                      
                       {update.attachments && update.attachments.length > 0 && (
                         <div className="mt-1.5 sm:mt-2 space-y-0.5 sm:space-y-1">
                           {update.attachments.map((att, attIdx) => (
@@ -1261,6 +1907,7 @@ const ViewTaskModal = ({
             </div>
           )}
 
+          {/* ─── Expenses ─── */}
           {selectedTask.expenses && selectedTask.expenses.length > 0 && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
@@ -1287,7 +1934,12 @@ const ViewTaskModal = ({
                         {exp.distance > 0 && (
                           <p className="text-[10px] sm:text-xs text-gray-500">{exp.distance} km</p>
                         )}
-                        <p className="text-[8px] sm:text-[10px] text-gray-400">{formatDateTime(exp.addedAt || exp.expenseDate)}</p>
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[8px] sm:text-[10px] text-gray-400 mt-0.5">
+                          <span>Added: {formatDateTime(exp.addedAt || exp.expenseDate)}</span>
+                          {exp.addedBy && (
+                            <span>by {exp.addedBy.name || 'Unknown'}</span>
+                          )}
+                        </div>
                       </div>
                       {exp.approvalStatus && (
                         <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[10px] font-medium flex-shrink-0 ${
@@ -1313,6 +1965,7 @@ const ViewTaskModal = ({
             </div>
           )}
 
+          {/* ─── Attachments ─── */}
           {selectedTask.attachments && selectedTask.attachments.length > 0 && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
@@ -1346,6 +1999,7 @@ const ViewTaskModal = ({
             </div>
           )}
 
+          {/* ─── Reported Issues ─── */}
           {reportedIssues.length > 0 && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2">
@@ -1354,15 +2008,15 @@ const ViewTaskModal = ({
               </h4>
               <div className="space-y-2 sm:space-y-3 max-h-48 sm:max-h-60 overflow-y-auto">
                 {reportedIssues.map((issue, idx) => {
-                  const emp = getEmployeeDetails(issue.employeeId) || { name: 'Unknown', email: 'N/A' };
+                  const emp = issue.employeeId || { name: 'Unknown', email: 'N/A' };
                   return (
                     <div key={idx} className="bg-white/50 backdrop-blur-sm rounded-lg p-2 sm:p-3 border border-white/30">
                       <div className="flex flex-wrap items-center justify-between gap-1 sm:gap-2 mb-1 sm:mb-2">
                         <div className="flex items-center gap-1.5 sm:gap-2">
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-r from-rose-400 to-rose-500 flex items-center justify-center text-white font-bold text-[8px] sm:text-xs">
+                          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-r from-rose-400 to-rose-500 flex items-center justify-center text-white font-bold text-[8px] sm:text-xs flex-shrink-0">
                             {emp.name?.charAt(0) || 'U'}
                           </div>
-                          <span className="text-xs sm:text-sm font-medium text-gray-800">{emp.name}</span>
+                          <span className="text-xs sm:text-sm font-medium text-gray-800">{emp.name || 'Unknown'}</span>
                           <span className="text-[10px] sm:text-xs text-gray-500">
                             {issue.reportedAt ? formatDateTime(issue.reportedAt) : 'N/A'}
                           </span>
@@ -1395,6 +2049,7 @@ const ViewTaskModal = ({
             </div>
           )}
 
+          {/* ─── Remark ─── */}
           {selectedTask.remark && (
             <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
@@ -1405,17 +2060,39 @@ const ViewTaskModal = ({
             </div>
           )}
 
+          {/* ─── Voice Note ─── */}
           {selectedTask.voiceNote && (
-            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30">
+            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/30 mb-4 sm:mb-6">
               <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
                 <FiMic className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Voice Note
               </h4>
-              <audio controls src={selectedTask.voiceNote} className="w-full" />
+              <div className="bg-white/30 backdrop-blur-sm rounded-lg p-2 sm:p-3 border border-white/30">
+                <audio 
+                  controls 
+                  src={`${BASE_URL}/${selectedTask.voiceNote}`}
+                  className="w-full"
+                  preload="metadata"
+                  onLoadedMetadata={(e) => {
+                    console.log('✅ Audio loaded:', e.target.duration, 'seconds');
+                  }}
+                  onError={(e) => {
+                    console.error('❌ Audio error:', e);
+                  }}
+                />
+              </div>
             </div>
           )}
 
+          {/* ─── Footer Buttons ─── */}
           <div className="flex flex-wrap justify-end gap-2 sm:gap-3 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-100/50">
+            <button
+              onClick={generateReport}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-xs sm:text-sm font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all hover:scale-105 flex items-center gap-1.5 sm:gap-2"
+            >
+              <FiDownload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              Download Report
+            </button>
             <button
               onClick={() => { setShowViewModal(false); setSelectedTask(null); }}
               className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100/80 backdrop-blur-sm rounded-full text-xs sm:text-sm text-gray-700 font-medium hover:bg-gray-200 transition-all"
@@ -1438,7 +2115,6 @@ const ViewTaskModal = ({
     </div>
   );
 };
-
 // ─── Main Task Component ───
 function Task() {
   const navigate = useNavigate();
@@ -1456,6 +2132,8 @@ function Task() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterDue, setFilterDue] = useState('all');
+  const [filterCreatedBy, setFilterCreatedBy] = useState('all');
+  const [filterFrequency, setFilterFrequency] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1597,7 +2275,9 @@ function Task() {
         inProgress: statsData?.inProgress || 0,
         completed: statsData?.completed || 0,
         overdue: statsData?.overdue || 0,
-        rejected: statsData?.rejected || 0
+        rejected: statsData?.rejected || 0,
+        employeeCreated: tasksData.filter(t => t.createdByType === 'employee').length,
+        adminCreated: tasksData.filter(t => t.createdByType === 'admin' || !t.createdByType).length
       });
 
       const upcoming = getUpcomingTasksList(tasksData);
@@ -1699,7 +2379,7 @@ function Task() {
         createdByType: userRole,
         subtasks: subtasks,
         assignType: 'DEPARTMENT',
-        department: selectedDepartment, // ✅ Department ID send kar rahe hain
+        department: selectedDepartment,
         assignedTo: formData.assignedTo
       };
       
@@ -1731,7 +2411,7 @@ function Task() {
         frequency: formData.frequency,
         submitDate: formData.submitDate,
         remark: formData.remark,
-        department: selectedDepartment, // ✅ Department ID send kar rahe hain
+        department: selectedDepartment,
         assignedTo: formData.assignedTo,
         subtasks: subtasks,
         assignType: 'DEPARTMENT'
@@ -1777,7 +2457,6 @@ function Task() {
       ? task.assignedTo.map((emp) => (typeof emp === 'object' ? emp._id : emp))
       : [];
     
-    // ✅ Department ID set kar rahe hain
     const deptId = task.department?._id || task.department || '';
     
     setFormData({
@@ -1933,6 +2612,19 @@ function Task() {
     if (filterDue === 'upcoming') {
       filtered = getUpcomingTasksFilter(filtered);
     }
+
+    if (filterFrequency !== 'all') {
+      filtered = filtered.filter((task) => {
+        if (!task.frequency || task.frequency.length === 0) return false;
+        return task.frequency.includes(filterFrequency);
+      });
+    }
+
+    if (filterCreatedBy === 'employee') {
+      filtered = filtered.filter((task) => task.createdByType === 'employee');
+    } else if (filterCreatedBy === 'admin') {
+      filtered = filtered.filter((task) => task.createdByType === 'admin' || !task.createdByType);
+    }
     
     return filtered;
   };
@@ -1974,53 +2666,61 @@ function Task() {
     allEmployees: employees,
   };
 
+  const getUniqueFrequencies = () => {
+    const freqSet = new Set();
+    tasks.forEach(task => {
+      if (task.frequency && task.frequency.length > 0) {
+        task.frequency.forEach(f => freqSet.add(f));
+      }
+    });
+    return Array.from(freqSet);
+  };
+
+  const uniqueFrequencies = getUniqueFrequencies();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30">
       <div className="flex flex-col lg:flex-row">
-        <div className="lg:hidden fixed top-2 left-2 z-50">
+        <div className="fixed top-0 left-0 h-full z-40" style={{ width: '280px' }}>
+          <Sidebar userRole={userRole} />
+        </div>
+
+        <div 
+          className={`
+            fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-all duration-300 lg:hidden
+            ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
+          `} 
+          onClick={() => setMobileMenuOpen(false)}
+        />
+
+        <div className="lg:hidden fixed top-3 left-3 z-50">
           <button
             onClick={toggleMobileMenu}
-            className="p-1.5 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/30 hover:bg-white transition-all hover:scale-105"
+            className="p-2 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/30 hover:bg-white transition-all hover:scale-105"
             aria-label="Toggle menu"
           >
             {mobileMenuOpen ? (
-              <FiX className="w-4 h-4 text-gray-700" />
+              <FiX className="w-5 h-5 text-gray-700" />
             ) : (
-              <FiMenu className="w-4 h-4 text-gray-700" />
+              <FiMenu className="w-5 h-5 text-gray-700" />
             )}
           </button>
         </div>
 
         <div 
           className={`
-            fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-all duration-300 lg:hidden
-            ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
-          `} 
-          onClick={() => setMobileMenuOpen(false)}
-        />
-
-        <div 
-          className={`
-            fixed top-0 left-0 h-full z-40 transition-all duration-300 ease-in-out
+            fixed top-0 left-0 h-full z-40 transition-all duration-300 ease-in-out lg:hidden
             ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-            lg:translate-x-0 lg:fixed
           `}
           style={{ width: '280px' }}
         >
           <Sidebar userRole={userRole} />
-          <button
-            onClick={() => setMobileMenuOpen(false)}
-            className="lg:hidden absolute top-2 right-2 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-            aria-label="Close menu"
-          >
-            <FiX className="w-4 h-4 text-white" />
-          </button>
         </div>
 
-        <div className="flex-1 min-h-screen w-full lg:pl-[280px] overflow-y-auto">
+        <div className="flex-1 min-h-screen w-full lg:pl-[280px]">
           <nav className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-white/30 shadow-sm">
             <div className="flex flex-wrap items-center justify-between px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-3 lg:py-4 gap-2">
-              <div className="flex items-center gap-2 sm:gap-3 ml-10 lg:ml-0">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30 flex-shrink-0">
                   <FaTasks className="text-white w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
@@ -2060,7 +2760,8 @@ function Task() {
             </div>
           </nav>
 
-          <div className="p-3 sm:p-4 md:p-6 lg:p-8">
+          <div className="p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto" style={{ height: 'calc(100vh - 80px)' }}>
+            {/* Rest of the content remains same... */}
             {showUpcomingPopup && upcomingTasks.length > 0 && (
               <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
                 <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-slideDown relative">
@@ -2174,7 +2875,7 @@ function Task() {
             </div>
 
             {stats && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6 lg:mb-8">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6 lg:mb-8">
                 {[
                   { label: 'Total', value: stats.total || 0, icon: <FiBarChart2 className="text-white w-4 h-4 sm:w-5 sm:h-5" />, gradient: 'from-indigo-400 to-indigo-500' },
                   { label: 'Pending', value: stats.pending || 0, icon: <FiClock className="text-white w-4 h-4 sm:w-5 sm:h-5" />, gradient: 'from-amber-400 to-amber-500' },
@@ -2232,6 +2933,29 @@ function Task() {
                 <option value="Medium">Medium</option>
                 <option value="Low">Low</option>
               </select>
+              <select
+                value={filterFrequency}
+                onChange={(e) => setFilterFrequency(e.target.value)}
+                className="px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm min-w-[100px] sm:min-w-[130px]"
+              >
+                <option value="all">All Frequency</option>
+                {uniqueFrequencies.map((freq) => (
+                  <option key={freq} value={freq}>{freq}</option>
+                ))}
+              </select>
+              <select
+                value={filterCreatedBy}
+                onChange={(e) => setFilterCreatedBy(e.target.value)}
+                className="px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-xs sm:text-sm min-w-[120px] sm:min-w-[150px]"
+              >
+                <option value="all">All Tasks</option>
+                <option value="admin">
+                  <FiUserCheck className="inline mr-1" /> Admin Created
+                </option>
+                <option value="employee">
+                  <FiUser className="inline mr-1" /> Employee Created
+                </option>
+              </select>
               <button
                 onClick={() => setFilterDue(filterDue === 'upcoming' ? 'all' : 'upcoming')}
                 className={`px-2 sm:px-4 py-1.5 sm:py-2.5 rounded-full text-[10px] sm:text-sm font-medium transition-all flex items-center gap-1.5 sm:gap-2 ${
@@ -2252,6 +2976,8 @@ function Task() {
                   setFilterStatus('all');
                   setFilterPriority('all');
                   setFilterDue('all');
+                  setFilterCreatedBy('all');
+                  setFilterFrequency('all');
                 }}
                 className="px-2 sm:px-4 py-1.5 sm:py-2.5 bg-white/40 backdrop-blur-sm border border-white/30 rounded-full text-[10px] sm:text-sm font-medium text-gray-600 hover:bg-white/60 transition-all flex items-center gap-1.5 sm:gap-2"
               >
@@ -2264,13 +2990,6 @@ function Task() {
               <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-rose-50/80 backdrop-blur-sm border border-rose-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-rose-700 text-xs sm:text-sm">
                 <FiAlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 {error}
-              </div>
-            )}
-
-            {filterDue === 'upcoming' && (
-              <div className="p-3 sm:p-4 mb-4 sm:mb-6 bg-gradient-to-r from-purple-50/80 to-indigo-50/80 backdrop-blur-sm border border-purple-200/50 rounded-xl flex items-center gap-2 sm:gap-3 text-purple-700 text-xs sm:text-sm">
-                <FiBell className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="font-medium">Showing {filteredTasks.length} upcoming tasks sorted by due date</span>
               </div>
             )}
 
@@ -2288,6 +3007,12 @@ function Task() {
                 <p className="text-xs sm:text-sm text-gray-400 mt-1">
                   {filterDue === 'upcoming' 
                     ? 'No upcoming tasks! All tasks are completed or not due yet 🎉'
+                    : filterFrequency !== 'all'
+                    ? `No tasks found with frequency: ${filterFrequency}`
+                    : filterCreatedBy === 'employee'
+                    ? 'No tasks created by employees yet!'
+                    : filterCreatedBy === 'admin'
+                    ? 'No tasks created by admin yet!'
                     : 'Create your first task to get started!'}
                 </p>
               </div>
@@ -2300,8 +3025,10 @@ function Task() {
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Task</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Priority</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Frequency</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Progress</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Submit Date</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Created By</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Assigned To</th>
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                       </tr>
@@ -2310,6 +3037,15 @@ function Task() {
                       {currentTasks.map((task, index) => {
                         const isUpcoming = task.submitDate && task.status !== 'Completed' && task.status !== 'Rejected';
                         const daysLeft = isUpcoming ? Math.ceil((new Date(task.submitDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                        
+                        const createdByUser = task.createdBy;
+                        const isEmployeeCreated = task.createdByType === 'employee';
+                        let creatorName = 'Admin';
+                        let creatorInitial = 'A';
+                        if (createdByUser && typeof createdByUser === 'object') {
+                          creatorName = createdByUser.name || 'Unknown';
+                          creatorInitial = creatorName.charAt(0).toUpperCase();
+                        }
                         
                         return (
                           <tr
@@ -2342,6 +3078,20 @@ function Task() {
                               </span>
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-3">
+                              <div className="flex flex-wrap gap-0.5">
+                                {task.frequency && task.frequency.length > 0 ? (
+                                  task.frequency.map((freq, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[7px] sm:text-[10px] font-medium">
+                                      <FiRepeat className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
+                                      {freq}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-[8px] sm:text-xs text-gray-400">—</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 sm:px-6 py-2 sm:py-3">
                               <div className="flex items-center gap-1 sm:gap-2">
                                 <div className="flex-1 min-w-[40px] sm:min-w-[60px]">
                                   <div className="w-full h-1.5 sm:h-2 bg-gray-200/50 rounded-full overflow-hidden">
@@ -2358,6 +3108,27 @@ function Task() {
                               <div className="flex items-center gap-0.5 sm:gap-1.5 text-[10px] sm:text-sm text-gray-600">
                                 <FiCalendar className="w-3 h-3 sm:w-4 sm:h-4" />
                                 {task.submitDate ? new Date(task.submitDate).toLocaleDateString() : 'N/A'}
+                              </div>
+                            </td>
+                            <td className="px-3 sm:px-6 py-2 sm:py-3">
+                              <div className="flex items-center gap-1">
+                                <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-white font-bold text-[8px] sm:text-xs ${
+                                  isEmployeeCreated 
+                                    ? 'bg-gradient-to-r from-emerald-400 to-teal-500' 
+                                    : 'bg-gradient-to-r from-indigo-400 to-purple-500'
+                                }`}>
+                                  {creatorInitial}
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[8px] sm:text-xs text-gray-700 truncate max-w-[50px] sm:max-w-[80px]">
+                                    {creatorName}
+                                  </span>
+                                  <span className={`text-[6px] sm:text-[8px] font-medium ${
+                                    isEmployeeCreated ? 'text-emerald-600' : 'text-indigo-600'
+                                  }`}>
+                                    {isEmployeeCreated ? '👤 Employee' : '👑 Admin'}
+                                  </span>
+                                </div>
                               </div>
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-3">

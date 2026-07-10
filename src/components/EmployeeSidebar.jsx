@@ -17,7 +17,11 @@ import {
   FiX,
   FiSettings,
   FiUser as FiUserIcon,
-  FiSun
+  FiSun,
+  FiClock,
+  FiRefreshCw,
+  FiAlertCircle,
+  FiCheckCircle
 } from 'react-icons/fi';
 import { FaTasks } from 'react-icons/fa';
 
@@ -48,6 +52,10 @@ const BOTTOM_NAV_ITEMS = [
     isParent: true,
     children: [
       { id: 'my-tasks', label: 'My Tasks', path: '/my-task', icon: <FiList className="w-4 h-4" /> },
+      { id: 'pending-tasks', label: 'Pending Tasks', path: '/emp-pending-task', icon: <FiClock className="w-4 h-4" /> },
+      { id: 'progress-tasks', label: 'In Progress Tasks', path: '/emp-progress-task', icon: <FiRefreshCw className="w-4 h-4" /> },
+      { id: 'completed-tasks', label: 'Completed Tasks', path: '/emp-completed-task', icon: <FiCheckCircle className="w-4 h-4" /> },
+      { id: 'overdue-tasks', label: 'Overdue Tasks', path: '/emp-overdue-task', icon: <FiAlertCircle className="w-4 h-4" /> },
       { id: 'today-tasks', label: "Today's Tasks", path: '/my-today-tasks', icon: <FiSun className="w-4 h-4" /> },
       { id: 'create-task', label: 'Create Task', path: '/create-task', icon: <FiPlus className="w-4 h-4" /> },
     ]
@@ -91,6 +99,10 @@ const NAV_ITEMS = [
     isParent: true,
     children: [
       { id: 'my-tasks', label: 'My Tasks', path: '/my-task', icon: <FiList className="w-4 h-4" /> },
+      { id: 'pending-tasks', label: 'Pending Tasks', path: '/emp-pending-task', icon: <FiClock className="w-4 h-4" /> },
+      { id: 'progress-tasks', label: 'In Progress Tasks', path: '/emp-progress-task', icon: <FiRefreshCw className="w-4 h-4" /> },
+      { id: 'completed-tasks', label: 'Completed Tasks', path: '/emp-completed-task', icon: <FiCheckCircle className="w-4 h-4" /> },
+      { id: 'overdue-tasks', label: 'Overdue Tasks', path: '/emp-overdue-task', icon: <FiAlertCircle className="w-4 h-4" /> },
       { id: 'today-tasks', label: "Today's Tasks", path: '/my-today-tasks', icon: <FiSun className="w-4 h-4" /> },
       { id: 'create-task', label: 'Create Task', path: '/create-task', icon: <FiPlus className="w-4 h-4" /> },
     ]
@@ -189,7 +201,13 @@ function EmployeeSidebar({ employeeName, onLogout, onCollapseChange }) {
   };
 
   const isBottomNavActive = (path) => {
-    if (path === '/my-task' && location.pathname === '/my-task') return true;
+    if (path === '/my-task' && (
+      location.pathname === '/my-task' ||
+      location.pathname === '/emp-pending-task' ||
+      location.pathname === '/emp-progress-task' ||
+      location.pathname === '/emp-completed-task' ||
+      location.pathname === '/emp-overdue-task'
+    )) return true;
     if (path === '/my-today-tasks' && location.pathname === '/my-today-tasks') return true;
     if (path === '/create-task' && location.pathname === '/create-task') return true;
     if (path === '/my-issues' && location.pathname === '/my-issues') return true;

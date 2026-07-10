@@ -996,6 +996,25 @@ function Login() {
   const [showPopup, setShowPopup] = useState(false);
   const [popupStatus, setPopupStatus] = useState('⏳ Fetching...');
   const [employeeData, setEmployeeData] = useState(null);
+  const [coords, setCoords] = useState({ latitude: undefined, longitude: undefined });
+
+  // ─── GEOLOCATION CAPTURE ───
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCoords({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.warn("Geolocation request failed or denied:", error.message);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+  }, []);
 
   // ─── SPEECH SYNTHESIS ───
   const speakWelcome = (name, role) => {
@@ -1106,7 +1125,12 @@ function Login() {
       // Try employee login first
       const employeeResponse = await axios.post(
         `${BASE_URL}/employees/login`,
-        { email, password }
+        { 
+          email, 
+          password,
+          latitude: coords.latitude,
+          longitude: coords.longitude
+        }
       );
 
       const responseData = employeeResponse.data;
@@ -1280,7 +1304,12 @@ function Login() {
     try {
       const employeeResponse = await axios.post(
         `${BASE_URL}/employees/login`,
-        { email: formData.email, password: formData.password }
+        { 
+          email: formData.email, 
+          password: formData.password,
+          latitude: coords.latitude,
+          longitude: coords.longitude
+        }
       );
 
       const responseData = employeeResponse.data;

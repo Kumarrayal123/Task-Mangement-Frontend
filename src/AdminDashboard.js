@@ -463,10 +463,13 @@ function AdminDashboard() {
                 const value = statValues[index];
                 const gradient = statCardGradients[index];
                 
+                // Define routes for each stat card
+                const statRoutes = ['/staff', '/task', '/admin-pending-task', '/admin-progress-task', '/admin-completed-task'];
+                
                 return (
                   <div 
                     key={index}
-                    onClick={() => navigateTo(index === 0 ? '/staff' : '/task')}
+                    onClick={() => navigateTo(statRoutes[index])}
                     className="group relative bg-white/40 backdrop-blur-xl rounded-2xl p-4 border border-white/30 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 hover:-translate-y-1 cursor-pointer overflow-hidden"
                   >
                     {/* Animated gradient background */}

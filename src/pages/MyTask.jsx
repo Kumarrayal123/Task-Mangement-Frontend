@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { 
   FiRefreshCw, FiCheckCircle, FiClock, FiAlertCircle, FiBarChart2,
@@ -18,7 +18,9 @@ import {
   updateTaskByEmployee, 
   reportTaskIssue,
   getTaskIssues,
-  deleteTask
+  deleteTask,
+  deleteTaskExpense,
+  updateTaskExpense
 } from '../services/taskService';
 import './MyTask.css';
 
@@ -68,9 +70,9 @@ function getInitials(name = '') {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-function StatCard({ label, value, icon, gradient }) {
+function StatCard({ label, value, icon, gradient, onClick }) {
   return (
-    <div className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-2 sm:p-4 lg:p-5 border border-white/30 shadow-lg hover:shadow-xl transition-all hover:scale-105 cursor-pointer">
+    <div onClick={onClick} className="bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-2 sm:p-4 lg:p-5 border border-white/30 shadow-lg hover:shadow-xl transition-all hover:scale-105 cursor-pointer">
       <div className="flex items-center gap-1.5 sm:gap-3">
         <div className={`w-6 h-6 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-xl flex items-center justify-center shadow-lg ${gradient}`}>
           <span className="text-white text-xs sm:text-base lg:text-lg">{icon}</span>
@@ -137,8 +139,9 @@ const CountdownTimer = ({ targetDate }) => {
   );
 };
 
-function MyTasks() {
+function MyTasks({ defaultStatus = 'ALL', defaultDue = 'ALL' }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [employeeName, setName] = useState('');
   const [employeeId, setEmpId] = useState('');
   
@@ -148,11 +151,24 @@ function MyTasks() {
   const [error, setError] = useState('');
   
   // ─── Filters ───
-  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState(() => {
+    return location.state?.filterStatus || defaultStatus;
+  });
   const [filterPriority, setFilterPriority] = useState('ALL');
   const [filterType, setFilterType] = useState('ALL');
-  const [filterDue, setFilterDue] = useState('ALL');
+  const [filterDue, setFilterDue] = useState(() => {
+    return location.state?.filterDue || defaultDue;
+  });
   const [search, setSearch] = useState('');
+
+  // Sync state with props or location.state on route transition
+  useEffect(() => {
+    setFilterStatus(location.state?.filterStatus || defaultStatus);
+  }, [defaultStatus, location.state?.filterStatus]);
+
+  useEffect(() => {
+    setFilterDue(location.state?.filterDue || defaultDue);
+  }, [defaultDue, location.state?.filterDue]);
   
   // ─── Upcoming Tasks Popup ───
   const [showUpcomingPopup, setShowUpcomingPopup] = useState(false);
@@ -212,6 +228,11 @@ function MyTasks() {
   const [expenseError, setExpenseError] = useState('');
   const [expensesExpanded, setExpensesExpanded] = useState(false);
   const [fetchingLocation, setFetchingLocation] = useState(false);
+  // ─── Already-saved expenses shown read-only in the modal ───
+  const [existingExpenses, setExistingExpenses] = useState([]);
+  // ─── Editing an already-saved expense ───
+  const [editingExistingExpense, setEditingExistingExpense] = useState(null); // { expenseId, taskId }
+  const [expenseActionLoading, setExpenseActionLoading] = useState(false); // for delete/save spinner
 
   // ─── Toast State ───
   const [showToast, setShowToast] = useState(false);
@@ -442,11 +463,44 @@ function MyTasks() {
       status = 'Completed';
     }
     
+    // ─── Get current employee's latest update from today ───
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const empUpdates = (task.employeeUpdates || []).filter(update => {
+      const updateEmpId = update.employeeId?._id || update.employeeId;
+      const updateDate = new Date(update.updatedAt);
+      updateDate.setHours(0, 0, 0, 0);
+      return updateEmpId?.toString() === employeeId?.toString() && 
+             updateDate.getTime() === today.getTime();
+    });
+    
+    let latestUpdate = null;
+    if (empUpdates.length > 0) {
+      latestUpdate = empUpdates[empUpdates.length - 1];
+    }
+    
+    // ─── DEBUG: Check task.expenses ───
+    console.log('📌 Task expenses:', task.expenses);
+    console.log('📌 Task expenses length:', task.expenses?.length);
+    console.log('📌 Current employeeId:', employeeId);
+    
+    // ─── Get ALL current employee's already-saved expenses (display-only, NOT re-submitted) ───
+    const empExpenses = (task.expenses || []).filter(expense => {
+      const expEmpId = expense.addedBy?._id || expense.addedBy;
+      return expEmpId?.toString() === employeeId?.toString();
+    });
+    
+    console.log('📌 Existing employee expenses (read-only display):', empExpenses);
+    
+    // Show existing expenses as read-only; start with empty new-expenses list
+    setExistingExpenses(empExpenses);
+    
     setUpdateData({
-      updateText: '',
-      progress: progress,
-      remark: '',
-      expenses: task.expenses || [],
+      updateText: latestUpdate?.updateText || '',
+      progress: latestUpdate?.progress || progress,
+      remark: latestUpdate?.remark || '',
+      expenses: [], // Only NEW expenses added in this session are sent to backend
       status: status
     });
     setAttachments([]);
@@ -458,7 +512,7 @@ function MyTasks() {
       description: ''
     });
     setExpenseError('');
-    setExpensesExpanded(false);
+    setExpensesExpanded(true); // Expand expenses by default so users can see the form
     setShowUpdateModal(true);
   };
 
@@ -585,6 +639,7 @@ function MyTasks() {
     }
 
     const expense = {
+      _id: newExpense._id || undefined, // Include _id if updating existing
       location: {
         address: newExpense.location.address || 'N/A',
         latitude: parseFloat(newExpense.location.latitude) || 0,
@@ -594,7 +649,8 @@ function MyTasks() {
       expenseAmount: parseFloat(newExpense.expenseAmount) || 0,
       description: newExpense.description,
       addedBy: employeeId,
-      addedAt: new Date().toISOString()
+      addedAt: new Date().toISOString(),
+      expenseDate: new Date().toISOString() // Add expenseDate for backend matching
     };
 
     setUpdateData(prev => ({
@@ -611,8 +667,95 @@ function MyTasks() {
     setExpenseError('');
   };
 
-  // ─── Remove Expense ───
+  // ─── Delete an already-saved expense from DB ───
+  const handleDeleteExistingExpense = async (expense) => {
+    if (!window.confirm(`Delete expense "₹${expense.expenseAmount} - ${expense.description}"?`)) return;
+    setExpenseActionLoading(true);
+    try {
+      await deleteTaskExpense(selectedTask._id, expense._id, employeeId);
+      setExistingExpenses(prev => prev.filter(e => e._id !== expense._id));
+      showToastMessage('Expense deleted successfully!', 'success');
+    } catch (err) {
+      showToastMessage(err.response?.data?.message || 'Failed to delete expense', 'error');
+    } finally {
+      setExpenseActionLoading(false);
+    }
+  };
+
+  // ─── Start editing an already-saved expense ───
+  const handleStartEditExistingExpense = (expense) => {
+    setEditingExistingExpense(expense._id);
+    setNewExpense({
+      _id: expense._id,
+      location: {
+        address: expense.location?.address || '',
+        latitude: expense.location?.latitude || '',
+        longitude: expense.location?.longitude || ''
+      },
+      distance: expense.distance || '',
+      expenseAmount: expense.expenseAmount || '',
+      description: expense.description || ''
+    });
+    setExpensesExpanded(true);
+    // Scroll the form into view after state settles
+    setTimeout(() => {
+      document.getElementById('expense-form-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
+
+  // ─── Save edit of an already-saved expense to DB ───
+  const handleSaveExistingExpenseEdit = async () => {
+    if (!newExpense.expenseAmount || !newExpense.description) {
+      setExpenseError('Please fill at least Amount and Description');
+      return;
+    }
+    setExpenseActionLoading(true);
+    try {
+      await updateTaskExpense(selectedTask._id, editingExistingExpense, employeeId, {
+        location: newExpense.location,
+        distance: parseFloat(newExpense.distance) || 0,
+        expenseAmount: parseFloat(newExpense.expenseAmount) || 0,
+        description: newExpense.description
+      });
+      // Update local existingExpenses state
+      setExistingExpenses(prev => prev.map(e =>
+        e._id === editingExistingExpense
+          ? { ...e, ...newExpense, expenseAmount: parseFloat(newExpense.expenseAmount), distance: parseFloat(newExpense.distance) || 0 }
+          : e
+      ));
+      setEditingExistingExpense(null);
+      setNewExpense({ location: { address: '', latitude: '', longitude: '' }, distance: '', expenseAmount: '', description: '' });
+      setExpenseError('');
+      showToastMessage('Expense updated successfully!', 'success');
+    } catch (err) {
+      showToastMessage(err.response?.data?.message || 'Failed to update expense', 'error');
+    } finally {
+      setExpenseActionLoading(false);
+    }
+  };
+
+  // ─── Remove Expense (new, unsaved) ───
   const handleRemoveExpense = (index) => {
+    setUpdateData(prev => ({
+      ...prev,
+      expenses: prev.expenses.filter((_, i) => i !== index)
+    }));
+  };
+
+  // ─── Edit Expense ───
+  const handleEditExpense = (expense, index) => {
+    setNewExpense({
+      _id: expense._id,
+      location: {
+        address: expense.location?.address || '',
+        latitude: expense.location?.latitude || '',
+        longitude: expense.location?.longitude || ''
+      },
+      distance: expense.distance || '',
+      expenseAmount: expense.expenseAmount || '',
+      description: expense.description || ''
+    });
+    // Remove the expense from the list temporarily (will be re-added when saved)
     setUpdateData(prev => ({
       ...prev,
       expenses: prev.expenses.filter((_, i) => i !== index)
@@ -1129,12 +1272,48 @@ function MyTasks() {
 
             {/* ─── Stats ─── */}
             <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 sm:gap-3 md:gap-4">
-              <StatCard label="Total" value={totalTasks} icon={<FiBarChart2 className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-indigo-400 to-indigo-500 shadow-indigo-500/30" />
-              <StatCard label="In Progress" value={counts['In Progress']} icon={<FiRefreshCw className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-blue-400 to-blue-500 shadow-blue-500/30" />
-              <StatCard label="Completed" value={counts.Completed} icon={<FiCheckCircle className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-emerald-500/30" />
-              <StatCard label="Pending" value={counts.Pending} icon={<FiClock className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-amber-400 to-amber-500 shadow-amber-500/30" />
-              <StatCard label="Today Due" value={dueCounts.TODAY} icon={<FiCalendar className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-purple-400 to-purple-500 shadow-purple-500/30" />
-              <StatCard label="Overdue" value={dueCounts.OVERDUE} icon={<FiAlertCircle className="w-3 h-3 sm:w-5 sm:h-5" />} gradient="bg-gradient-to-r from-rose-400 to-rose-500 shadow-rose-500/30" />
+              <StatCard 
+                label="Total" 
+                value={totalTasks} 
+                icon={<FiBarChart2 className="w-3 h-3 sm:w-5 sm:h-5" />} 
+                gradient="bg-gradient-to-r from-indigo-400 to-indigo-500 shadow-indigo-500/30" 
+                onClick={() => navigate('/my-task')}
+              />
+              <StatCard 
+                label="In Progress" 
+                value={counts['In Progress']} 
+                icon={<FiRefreshCw className="w-3 h-3 sm:w-5 sm:h-5" />} 
+                gradient="bg-gradient-to-r from-blue-400 to-blue-500 shadow-blue-500/30" 
+                onClick={() => navigate('/emp-progress-task')}
+              />
+              <StatCard 
+                label="Completed" 
+                value={counts.Completed} 
+                icon={<FiCheckCircle className="w-3 h-3 sm:w-5 sm:h-5" />} 
+                gradient="bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-emerald-500/30" 
+                onClick={() => navigate('/emp-completed-task')}
+              />
+              <StatCard 
+                label="Pending" 
+                value={counts.Pending} 
+                icon={<FiClock className="w-3 h-3 sm:w-5 sm:h-5" />} 
+                gradient="bg-gradient-to-r from-amber-400 to-amber-500 shadow-amber-500/30" 
+                onClick={() => navigate('/emp-pending-task')}
+              />
+              <StatCard 
+                label="Today Due" 
+                value={dueCounts.TODAY} 
+                icon={<FiCalendar className="w-3 h-3 sm:w-5 sm:h-5" />} 
+                gradient="bg-gradient-to-r from-purple-400 to-purple-500 shadow-purple-500/30" 
+                onClick={() => navigate('/emp-overdue-task')}
+              />
+              <StatCard 
+                label="Overdue" 
+                value={dueCounts.OVERDUE} 
+                icon={<FiAlertCircle className="w-3 h-3 sm:w-5 sm:h-5" />} 
+                gradient="bg-gradient-to-r from-rose-400 to-rose-500 shadow-rose-500/30" 
+                onClick={() => navigate('/emp-overdue-task')}
+              />
             </div>
 
             {/* ─── Dropdown Filters ─── */}
@@ -1675,9 +1854,9 @@ function MyTasks() {
                     <div className="flex items-center gap-1 sm:gap-2">
                       <FiDollarSign className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-indigo-600" />
                       <span className="text-[10px] sm:text-sm font-semibold text-gray-700">Expenses</span>
-                      {updateData.expenses.length > 0 && (
+                      {(existingExpenses.length > 0 || updateData.expenses.length > 0) && (
                         <span className="ml-0.5 sm:ml-1 px-1 sm:px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[6px] sm:text-xs font-medium">
-                          {updateData.expenses.length}
+                          {existingExpenses.length + updateData.expenses.length}
                         </span>
                       )}
                     </div>
@@ -1696,43 +1875,121 @@ function MyTasks() {
 
                   {expensesExpanded && (
                     <div className="mt-1.5 sm:mt-3 space-y-1.5 sm:space-y-3">
-                      {updateData.expenses.length > 0 && (
-                        <div className="space-y-1 sm:space-y-2 max-h-24 sm:max-h-40 overflow-y-auto">
-                          {updateData.expenses.map((exp, idx) => (
-                            <div key={idx} className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-3 border border-white/30 flex justify-between items-start">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[10px] sm:text-sm font-medium text-gray-800">₹{exp.expenseAmount} - {exp.description}</p>
-                                {exp.location?.address && (
-                                  <p className="text-[6px] sm:text-xs text-gray-500 flex items-center gap-0.5 sm:gap-1 truncate">
-                                    <FiMapPin className="w-2 h-2 sm:w-3 sm:h-3 flex-shrink-0" />
-                                    {exp.location.address}
-                                  </p>
-                                )}
-                                {exp.location?.latitude && exp.location?.longitude && (
-                                  <p className="text-[6px] sm:text-[10px] text-gray-400 truncate">
-                                    📍 {exp.location.latitude}, {exp.location.longitude}
-                                  </p>
-                                )}
-                                {exp.distance > 0 && (
-                                  <p className="text-[6px] sm:text-xs text-gray-500">{exp.distance} km</p>
-                                )}
-                                <p className="text-[6px] sm:text-[10px] text-gray-400">{formatDate(exp.addedAt)}</p>
+
+                      {/* ─── Already-saved expenses (editable) ─── */}
+                      {existingExpenses.length > 0 && (
+                        <div className="space-y-1 sm:space-y-2">
+                          <p className="text-[7px] sm:text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Previously Submitted Expenses</p>
+                          <div className="space-y-1 sm:space-y-2 max-h-36 sm:max-h-48 overflow-y-auto">
+                            {existingExpenses.map((exp) => (
+                              <div key={exp._id} className="bg-emerald-50/70 backdrop-blur-sm rounded-xl p-1.5 sm:p-3 border border-emerald-200/60 flex justify-between items-start gap-1">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[10px] sm:text-sm font-semibold text-gray-800">₹{exp.expenseAmount} - {exp.description}</p>
+                                  {exp.location?.address && exp.location.address !== 'N/A' && (
+                                    <p className="text-[6px] sm:text-xs text-gray-500 flex items-center gap-0.5 sm:gap-1 truncate">
+                                      <FiMapPin className="w-2 h-2 sm:w-3 sm:h-3 flex-shrink-0" />
+                                      {exp.location.address}
+                                    </p>
+                                  )}
+                                  {exp.distance > 0 && (
+                                    <p className="text-[6px] sm:text-xs text-gray-500">{exp.distance} km</p>
+                                  )}
+                                  <p className="text-[6px] sm:text-[9px] text-emerald-600 font-medium">✅ Saved</p>
+                                </div>
+                                <div className="flex gap-0.5 sm:gap-1 flex-shrink-0 items-center">
+                                  {expenseActionLoading && editingExistingExpense === exp._id ? (
+                                    <FiLoader className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-400 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStartEditExistingExpense(exp)}
+                                        disabled={expenseActionLoading}
+                                        className="p-0.5 sm:p-1 hover:bg-blue-100 rounded-full transition-colors disabled:opacity-40"
+                                        title="Edit this expense"
+                                      >
+                                        <FiEdit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteExistingExpense(exp)}
+                                        disabled={expenseActionLoading}
+                                        className="p-0.5 sm:p-1 hover:bg-rose-100 rounded-full transition-colors disabled:opacity-40"
+                                        title="Delete this expense"
+                                      >
+                                        <FiTrash className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveExpense(idx)}
-                                className="p-0.5 sm:p-1 hover:bg-rose-50 rounded-full transition-colors flex-shrink-0"
-                                title="Remove Expense"
-                              >
-                                <FiTrash className="w-3 h-3 sm:w-4 sm:h-4 text-rose-500" />
-                              </button>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       )}
 
-                      <div className="bg-white/30 backdrop-blur-sm rounded-xl p-2 sm:p-4 border border-white/30 space-y-1.5 sm:space-y-3">
-                        <p className="text-[8px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">Add New Expense</p>
+                      {/* ─── Newly added expenses (editable, will be sent to backend) ─── */}
+                      {updateData.expenses.length > 0 && (
+                        <div className="space-y-1 sm:space-y-2">
+                          <p className="text-[7px] sm:text-[10px] font-semibold text-indigo-500 uppercase tracking-wider">New Expenses (to be submitted)</p>
+                          <div className="space-y-1 sm:space-y-2 max-h-24 sm:max-h-36 overflow-y-auto">
+                            {updateData.expenses.map((exp, idx) => (
+                              <div key={`new-${idx}`} className="bg-white/40 backdrop-blur-sm rounded-xl p-1.5 sm:p-3 border border-indigo-200/40 flex justify-between items-start">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[10px] sm:text-sm font-medium text-gray-800">₹{exp.expenseAmount} - {exp.description}</p>
+                                  {exp.location?.address && (
+                                    <p className="text-[6px] sm:text-xs text-gray-500 flex items-center gap-0.5 sm:gap-1 truncate">
+                                      <FiMapPin className="w-2 h-2 sm:w-3 sm:h-3 flex-shrink-0" />
+                                      {exp.location.address}
+                                    </p>
+                                  )}
+                                  {exp.location?.latitude && exp.location?.longitude && (
+                                    <p className="text-[6px] sm:text-[10px] text-gray-400 truncate">
+                                      📍 {exp.location.latitude}, {exp.location.longitude}
+                                    </p>
+                                  )}
+                                  {exp.distance > 0 && (
+                                    <p className="text-[6px] sm:text-xs text-gray-500">{exp.distance} km</p>
+                                  )}
+                                </div>
+                                <div className="flex gap-1 flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditExpense(exp, idx)}
+                                    className="p-0.5 sm:p-1 hover:bg-blue-50 rounded-full transition-colors"
+                                    title="Edit Expense"
+                                  >
+                                    <FiEdit2 className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveExpense(idx)}
+                                    className="p-0.5 sm:p-1 hover:bg-rose-50 rounded-full transition-colors"
+                                    title="Remove Expense"
+                                  >
+                                    <FiTrash className="w-3 h-3 sm:w-4 sm:h-4 text-rose-500" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div id="expense-form-section" className="bg-white/30 backdrop-blur-sm rounded-xl p-2 sm:p-4 border border-white/30 space-y-1.5 sm:space-y-3">
+                        {/* Show different header if editing existing expense */}
+                        {editingExistingExpense ? (
+                          <div className="flex items-center justify-between">
+                            <p className="text-[8px] sm:text-xs font-semibold text-blue-600 uppercase tracking-wider">✏️ Editing Saved Expense</p>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingExistingExpense(null); setNewExpense({ location: { address: '', latitude: '', longitude: '' }, distance: '', expenseAmount: '', description: '' }); setExpenseError(''); }}
+                              className="text-[7px] sm:text-[10px] text-gray-400 hover:text-gray-600 underline"
+                            >Cancel edit</button>
+                          </div>
+                        ) : (
+                          <p className="text-[8px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">Add New Expense</p>
+                        )}
                         
                         {expenseError && (
                           <p className={`text-[8px] sm:text-xs ${expenseError.includes('✅') ? 'text-emerald-600' : expenseError.includes('❌') ? 'text-rose-600' : 'text-rose-600'}`}>
@@ -1842,11 +2099,17 @@ function MyTasks() {
 
                         <button
                           type="button"
-                          onClick={handleAddExpense}
-                          className="w-full px-2 sm:px-4 py-1 sm:py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg text-[8px] sm:text-sm font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center justify-center gap-0.5 sm:gap-2"
+                          onClick={editingExistingExpense ? handleSaveExistingExpenseEdit : handleAddExpense}
+                          disabled={expenseActionLoading}
+                          className={`w-full px-2 sm:px-4 py-1 sm:py-2 text-white rounded-lg text-[8px] sm:text-sm font-semibold shadow-lg transition-all hover:scale-105 flex items-center justify-center gap-0.5 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${editingExistingExpense ? 'bg-gradient-to-r from-blue-500 to-blue-600 shadow-blue-500/30 hover:shadow-blue-500/50' : 'bg-gradient-to-r from-indigo-500 to-purple-500 shadow-indigo-500/30 hover:shadow-indigo-500/50'}`}
                         >
-                          <FiPlusIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                          Add Expense
+                          {expenseActionLoading ? (
+                            <FiLoader className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+                          ) : editingExistingExpense ? (
+                            <><FiCheckCircle className="w-3 h-3 sm:w-4 sm:h-4" /> Save Changes</>
+                          ) : (
+                            <><FiPlusIcon className="w-3 h-3 sm:w-4 sm:h-4" /> Add Expense</>
+                          )}
                         </button>
                       </div>
                     </div>

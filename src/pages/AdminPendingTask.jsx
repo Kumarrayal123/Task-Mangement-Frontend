@@ -70,6 +70,8 @@ function AdminPendingTask() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('userData');
@@ -425,7 +427,7 @@ function AdminPendingTask() {
                             </td>
                             <td className="px-3 sm:px-6 py-2 sm:py-3 text-right" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-0.5 sm:gap-1.5">
-                                <button onClick={() => navigateTo('/task')} className="p-1 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-indigo-50 transition-all group" title="View Task">
+                                <button onClick={() => { setSelectedTask(task); setShowViewModal(true); }} className="p-1 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-indigo-50 transition-all group" title="View Task">
                                   <FiEye className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
                                 </button>
                                 <button onClick={() => navigateTo('/task')} className="p-1 sm:p-1.5 bg-white/50 backdrop-blur-sm rounded-full border border-white/30 hover:bg-amber-50 transition-all group" title="Edit Task">
@@ -481,6 +483,123 @@ function AdminPendingTask() {
           </div>
         </div>
       </div>
+
+      {/* View Task Modal */}
+      {showViewModal && selectedTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-slideDown">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-800">Task Details</h2>
+              <button 
+                onClick={() => { setShowViewModal(false); setSelectedTask(null); }}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <FiX className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Task Name</label>
+                  <p className="text-sm font-medium text-gray-800">{selectedTask.taskName || selectedTask.title || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Status</label>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusStyles(selectedTask.status)}`}>
+                    {getStatusIcon(selectedTask.status)} {selectedTask.status}
+                  </span>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Priority</label>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getPriorityStyles(selectedTask.priority)}`}>
+                    {getPriorityIcon(selectedTask.priority)} {selectedTask.priority}
+                  </span>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Progress</label>
+                  <p className="text-sm font-medium text-gray-800">{selectedTask.progress || 0}%</p>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Submit Date</label>
+                  <p className="text-sm font-medium text-gray-800">
+                    {selectedTask.submitDate ? new Date(selectedTask.submitDate).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Created By</label>
+                  <p className="text-sm font-medium text-gray-800">
+                    {selectedTask.createdBy?.name || selectedTask.createdBy?.fullName || 'Admin'}
+                  </p>
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase">Description</label>
+                <p className="text-sm text-gray-700 mt-1">{selectedTask.description || 'No description'}</p>
+              </div>
+
+              {selectedTask.assignedTo && selectedTask.assignedTo.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Assigned To</label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {selectedTask.assignedTo.map((emp, idx) => (
+                      <span key={idx} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
+                        {emp.name || emp.fullName || emp.email || 'Employee'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedTask.expenses && selectedTask.expenses.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Expenses</label>
+                  <div className="mt-2 space-y-2">
+                    {selectedTask.expenses.map((expense, idx) => (
+                      <div key={idx} className="p-3 bg-gray-50 rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-800">{expense.description || 'No description'}</span>
+                          <span className="text-sm font-bold text-emerald-600">₹{expense.expenseAmount || 0}</span>
+                        </div>
+                        {expense.location?.address && (
+                          <p className="text-xs text-gray-500 mt-1">📍 {expense.location.address}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedTask.attachments && selectedTask.attachments.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Attachments</label>
+                  <div className="mt-2 space-y-2">
+                    {selectedTask.attachments.map((attachment, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                        <FiPaperclip className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm text-gray-700">{attachment.fileName}</span>
+                        <a href={attachment.fileUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 text-xs">
+                          View
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+              <button 
+                onClick={() => { setShowViewModal(false); setSelectedTask(null); }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

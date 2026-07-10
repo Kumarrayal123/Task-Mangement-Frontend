@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { 
   FiPlus, 
@@ -2118,8 +2118,10 @@ const ViewTaskModal = ({
 // ─── Main Task Component ───
 function Task() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [adminName, setAdminName] = useState('');
   const userRole = localStorage.getItem('userRole') || 'admin';
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [stats, setStats] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -2300,6 +2302,24 @@ function Task() {
     }
   };
 
+  const fetchTaskById = async (taskId) => {
+    console.log('📌 fetchTaskById called with taskId:', taskId);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/singletask/${taskId}`);
+      console.log('📌 fetchTaskById response:', response.data);
+      if (response.data.success) {
+        console.log('📌 Setting selectedTask and showing view modal');
+        setSelectedTask(response.data.task);
+        setShowViewModal(true);
+      } else {
+        console.error('📌 fetchTaskById failed: success is false');
+      }
+    } catch (err) {
+      console.error('📌 Fetch task by ID error:', err);
+      setError('Failed to fetch task details');
+    }
+  };
+
   const fetchEmployees = async () => {
     setEmpLoading(true);
     try {
@@ -2332,7 +2352,15 @@ function Task() {
 
   useEffect(() => {
     fetchTasks();
-  }, []);
+    
+    // Check if taskId was passed from navigation state
+    if (location.state?.taskId) {
+      console.log('📌 taskId from navigation state:', location.state.taskId);
+      setSelectedTaskId(location.state.taskId);
+      // Fetch and show the specific task
+      fetchTaskById(location.state.taskId);
+    }
+  }, [location]);
 
   useEffect(() => {
     if (showCreateModal || showEditModal) {

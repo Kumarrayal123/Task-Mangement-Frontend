@@ -18,6 +18,10 @@ import AdminPendingTask from './pages/AdminPendingTask';
 import AdminProgressTask from './pages/AdminProgressTask';
 import AdminCompletedTask from './pages/AdminCompletedTask';
 import MyTodayTasks from './pages/MyTodayTasks';
+import EmpOverdueTask from './pages/EmpOverdueTask';
+import EmpPendingTask from './pages/EmpPendingTask';
+import EmpProgressTask from './pages/EmpProgressTask';
+import EmpCompletedTask from './pages/EmpCompletedTask';
 
 function App() {
   return (
@@ -40,6 +44,10 @@ function App() {
           <Route path="/admin-pending-task" element={<AdminPendingTask />} />
           <Route path="/admin-progress-task" element={<AdminProgressTask />} />
           <Route path="/admin-completed-task" element={<AdminCompletedTask />} />
+          <Route path="/emp-overdue-task" element={<EmpOverdueTask />} />
+          <Route path="/emp-pending-task" element={<EmpPendingTask />} />
+          <Route path="/emp-progress-task" element={<EmpProgressTask />} />
+          <Route path="/emp-completed-task" element={<EmpCompletedTask />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

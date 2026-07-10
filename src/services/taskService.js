@@ -61,36 +61,52 @@ export const getTaskById = async (taskId) => {
 
 // ─── Update Task ───
 export const updateTask = async (taskId, taskData, voiceNoteFile) => {
-  const formData = new FormData();
-  
-  Object.keys(taskData).forEach(key => {
-    const value = taskData[key];
-    if (value !== null && value !== undefined) {
-      if (Array.isArray(value)) {
-        // ─── Subtasks ko stringify karo ───
-        if (key === 'subtasks' || key === 'frequency' || key === 'attachments' || key === 'employeeUpdates' || key === 'expenses') {
-          formData.append(key, JSON.stringify(value));
-        } else {
-          formData.append(key, JSON.stringify(value));
-        }
-      } else if (value !== '') {
-        formData.append(key, value);
-      }
-    }
-  });
-
+  // ─── If there's a voiceNote file, use FormData; otherwise use JSON ───
   if (voiceNoteFile) {
+    const formData = new FormData();
+    
+    Object.keys(taskData).forEach(key => {
+      const value = taskData[key];
+      if (value !== null && value !== undefined) {
+        if (Array.isArray(value)) {
+          formData.append(key, JSON.stringify(value));
+        } else if (value !== '') {
+          formData.append(key, value);
+        }
+      }
+    });
+
     formData.append('voiceNote', voiceNoteFile);
+
+    console.log('📌 Using FormData with voiceNote');
+
+    try {
+      const response = await axios.put(`${API_BASE_URL}/updatetask/${taskId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Update task error:', error.response?.data);
+      throw error;
+    }
+  } else {
+    // ─── No voiceNote, use JSON (simpler and more reliable) ───
+    console.log('📌 Using JSON (no voiceNote)');
+    
+    try {
+      const response = await axios.put(`${API_BASE_URL}/updatetask/${taskId}`, taskData, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Update task error:', error.response?.data);
+      throw error;
+    }
   }
-
-  console.log('Update Task FormData:', Array.from(formData.entries()));
-
-  const response = await axios.put(`${API_BASE_URL}/updatetask/${taskId}`, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
-  return response.data;
 };
 
 // ─── Delete Task ───
@@ -159,50 +175,71 @@ export const getMyCreatedTasks = async (employeeId) => {
 
 // ─── UPDATE TASK BY EMPLOYEE (WITH SUBTASKS SUPPORT) ───
 export const updateTaskByEmployee = async (taskId, employeeId, updateData, attachments) => {
-  const formData = new FormData();
+  console.log('📌 updateData before sending:', updateData);
+  console.log('📌 expenses in updateData:', updateData.expenses);
+  console.log('📌 expenses type:', typeof updateData.expenses);
+  console.log('📌 expenses isArray:', Array.isArray(updateData.expenses));
+  console.log('📌 expenses length:', updateData.expenses?.length);
   
-  // ─── Add all fields to formData ───
-  Object.keys(updateData).forEach(key => {
-    const value = updateData[key];
-    if (value !== null && value !== undefined) {
-      if (Array.isArray(value)) {
-        // ─── Subtasks, expenses arrays ko stringify karo ───
-        if (key === 'subtasks' || key === 'expenses') {
-          formData.append(key, JSON.stringify(value));
-        } else {
-          formData.append(key, JSON.stringify(value));
-        }
-      } else if (typeof value === 'object' && value !== null) {
-        formData.append(key, JSON.stringify(value));
-      } else if (value !== '') {
-        formData.append(key, value);
-      }
-    }
-  });
-
-  // ─── Add attachments (Gallery & Camera) ───
+  // ─── If there are attachments, use FormData; otherwise use JSON ───
   if (attachments && attachments.length > 0) {
+    const formData = new FormData();
+    
+    // ─── Add all fields to formData ───
+    Object.keys(updateData).forEach(key => {
+      const value = updateData[key];
+      if (value !== null && value !== undefined) {
+        if (Array.isArray(value)) {
+          formData.append(key, JSON.stringify(value));
+        } else if (typeof value === 'object' && value !== null) {
+          formData.append(key, JSON.stringify(value));
+        } else if (value !== '') {
+          formData.append(key, value);
+        }
+      }
+    });
+
+    // ─── Add attachments ───
     attachments.forEach(file => {
       formData.append('attachments', file);
     });
-  }
 
-  console.log('Update By Employee FormData:', Array.from(formData.entries()));
+    console.log('📌 Using FormData with attachments');
 
-  try {
-    const response = await axios.put(
-      `${API_BASE_URL}/employee/update-task/${taskId}/${employeeId}`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error('Update by employee error:', error.response?.data);
-    throw error;
+    try {
+      const response = await axios.put(
+        `${API_BASE_URL}/employee/update-task/${taskId}/${employeeId}`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Update by employee error:', error.response?.data);
+      throw error;
+    }
+  } else {
+    // ─── No attachments, use JSON (simpler and more reliable) ───
+    console.log('📌 Using JSON (no attachments)');
+    
+    try {
+      const response = await axios.put(
+        `${API_BASE_URL}/employee/update-task/${taskId}/${employeeId}`,
+        updateData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Update by employee error:', error.response?.data);
+      throw error;
+    }
   }
 };
 
@@ -263,3 +300,21 @@ export const forwardTask = async (taskId, forwardData) => {
   );
   return response.data;
 };
+
+// ─── Delete a Single Expense from a Task ───
+export const deleteTaskExpense = async (taskId, expenseId, employeeId) => {
+  const response = await axios.delete(
+    `${API_BASE_URL}/${taskId}/expenses/${expenseId}`,
+    { data: { employeeId } }
+  );
+  return response.data;
+};
+
+// ─── Update / Edit a Single Expense in a Task ───
+export const updateTaskExpense = async (taskId, expenseId, employeeId, expenseData) => {
+  const response = await axios.put(
+    `${API_BASE_URL}/${taskId}/expenses/${expenseId}`,
+    { employeeId, ...expenseData }
+  );
+  return response.data;
+};

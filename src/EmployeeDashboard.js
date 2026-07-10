@@ -87,9 +87,9 @@ function getInitials(name = '') {
 }
 
 // ── Stat Card - FIXED ICON RENDERING ────────────────────────────────────────
-function StatCard({ label, value, icon: IconComponent, gradient }) {
+function StatCard({ label, value, icon: IconComponent, gradient, onClick }) {
   return (
-    <div className="relative bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-2.5 sm:p-4 lg:p-5 border border-white/30 
+    <div onClick={onClick} className="relative bg-white/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-2.5 sm:p-4 lg:p-5 border border-white/30 
       shadow-lg hover:shadow-2xl transition-all hover:scale-105 hover:-translate-y-1 cursor-pointer group overflow-hidden">
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
       <div className={`absolute -top-10 -right-10 w-20 h-20 bg-gradient-to-br ${gradient} rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-500 blur-2xl`}></div>
@@ -780,36 +780,42 @@ function EmployeeDashboard() {
                     value={totalAssignedTasks} 
                     icon={<FiBarChart2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
                     gradient="from-indigo-500 to-indigo-600" 
+                    onClick={() => navigate('/my-task')}
                   />
                   <StatCard 
                     label="In Progress" 
                     value={inProgressTasks} 
                     icon={<FiRefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
                     gradient="from-blue-500 to-blue-600" 
+                    onClick={() => navigate('/emp-progress-task')}
                   />
                   <StatCard 
                     label="Completed" 
                     value={completedTasks} 
                     icon={<FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
                     gradient="from-emerald-500 to-emerald-600" 
+                    onClick={() => navigate('/emp-completed-task')}
                   />
                   <StatCard 
                     label="Pending" 
                     value={pendingTasks} 
                     icon={<FiClock className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
                     gradient="from-purple-500 to-purple-600" 
+                    onClick={() => navigate('/emp-pending-task')}
                   />
                   <StatCard 
                     label="Overdue" 
                     value={overdueTasks} 
                     icon={<FiAlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
                     gradient="from-rose-500 to-rose-600" 
+                    onClick={() => navigate('/emp-overdue-task')}
                   />
                   <StatCard 
                     label="Completion Rate" 
                     value={`${completionRate}%`} 
                     icon={<FiTrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />} 
                     gradient="from-teal-500 to-teal-600" 
+                    onClick={()=>navigate('/my-task')}
                   />
                 </div>
 

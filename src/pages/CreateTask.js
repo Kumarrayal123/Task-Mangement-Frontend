@@ -441,7 +441,6 @@ function CreateTask() {
   // ─── Handle Success Popup Close ───
   const handlePopupClose = () => {
     setShowSuccessPopup(false);
-    navigate('/my-task');
   };
 
   // ─── Handle Logout ───

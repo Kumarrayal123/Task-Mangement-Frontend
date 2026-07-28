@@ -6,14 +6,15 @@ const API_BASE_URL = 'https://api.timelyhealth.in/api/tasks';
 export const createTask = async (taskData, voiceNoteFile) => {
   const formData = new FormData();
   
-  const objectIdFields = ['department', 'createdBy', 'projectId'];
+  // ✅ Team field ko bhi include karo
+  const objectIdFields = ['department', 'createdBy', 'projectId', 'team']; // ✅ team added
 
   Object.keys(taskData).forEach(key => {
     const value = taskData[key];
     if (value !== null && value !== undefined) {
       if (Array.isArray(value)) {
         // ─── Subtasks ko bhi stringify karo ───
-        if (key === 'subtasks' || key === 'frequency' || key === 'attachments' || key === 'employeeUpdates' || key === 'expenses') {
+        if (key === 'subtasks' || key === 'frequency' || key === 'attachments' || key === 'employeeUpdates' || key === 'expenses' || key === 'assignedTo') {
           formData.append(key, JSON.stringify(value));
         } else {
           formData.append(key, JSON.stringify(value));
@@ -124,6 +125,12 @@ export const bulkUpdateStatus = async (taskIds, status) => {
 // ─── Get Department Tasks ───
 export const getDepartmentTasks = async (departmentId) => {
   const response = await axios.get(`${API_BASE_URL}/department/${departmentId}`);
+  return response.data;
+};
+
+// ─── Get Team Tasks (NEW) ───
+export const getTeamTasks = async (teamId) => {
+  const response = await axios.get(`${API_BASE_URL}/team/${teamId}`);
   return response.data;
 };
 
@@ -317,4 +324,4 @@ export const updateTaskExpense = async (taskId, expenseId, employeeId, expenseDa
     { employeeId, ...expenseData }
   );
   return response.data;
-};
+};

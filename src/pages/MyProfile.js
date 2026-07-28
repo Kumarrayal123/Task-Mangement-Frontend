@@ -9,24 +9,19 @@ import {
   FiStar, FiTrendingUp, FiTrendingDown
 } from 'react-icons/fi';
 import { FaTasks, FaRocket } from 'react-icons/fa';
-import EmployeeSidebar from '../components/EmployeeSidebar';
+import Navbar from '../Navbar';
 
 const BASE_URL = 'https://api.timelyhealth.in/api';
 
 function MyProfile() {
   const navigate = useNavigate();
+  const userRole = localStorage.getItem('userRole') || 'employee';
   const [employeeData, setEmployeeData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [employeeName, setEmployeeName] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  // ─── Handle sidebar collapse state ───
-  const handleSidebarToggle = (collapsed) => {
-    setSidebarCollapsed(collapsed);
-  };
 
   // ─── Get employeeId from localStorage ───
   useEffect(() => {
@@ -145,7 +140,7 @@ function MyProfile() {
   const InfoCard = ({ icon, label, value, className = '' }) => {
     if (!value) return null;
     return (
-      <div className={`bg-white/40 backdrop-blur-sm rounded-xl p-4 border border-white/30 hover:shadow-lg transition-all ${className}`}>
+      <div className={`bg-white/40 backdrop-blur-sm rounded-xl p-4 border border-white/30 hover:shadow-lg transition-all hover:scale-[1.02] ${className}`}>
         <div className="flex items-start gap-3">
           <div className="text-indigo-500 mt-0.5">{icon}</div>
           <div className="flex-1 min-w-0">
@@ -174,16 +169,16 @@ function MyProfile() {
     );
   };
 
-  // ─── Dynamic padding based on sidebar state ───
-  const mainContentPadding = sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-[280px]';
-
   // ─── Loading State ───
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></div>
-          <p className="text-gray-500 text-sm">Loading profile...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex flex-col">
+        <Navbar userRole={userRole} onLogout={handleLogout} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></div>
+            <p className="text-gray-500 text-sm">Loading profile...</p>
+          </div>
         </div>
       </div>
     );
@@ -192,20 +187,23 @@ function MyProfile() {
   // ─── Error State ───
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex items-center justify-center p-4">
-        <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border border-white/30">
-          <div className="w-16 h-16 mx-auto bg-rose-100 rounded-full flex items-center justify-center mb-4">
-            <FiX className="w-8 h-8 text-rose-500" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex flex-col">
+        <Navbar userRole={userRole} onLogout={handleLogout} />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border border-white/30">
+            <div className="w-16 h-16 mx-auto bg-rose-100 rounded-full flex items-center justify-center mb-4">
+              <FiX className="w-8 h-8 text-rose-500" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Failed to Load Profile</h3>
+            <p className="text-gray-500 text-sm mb-6">{error}</p>
+            <button
+              onClick={fetchEmployeeProfile}
+              className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-2 mx-auto"
+            >
+              <FiRefreshCw className="w-4 h-4" />
+              Retry
+            </button>
           </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">Failed to Load Profile</h3>
-          <p className="text-gray-500 text-sm mb-6">{error}</p>
-          <button
-            onClick={fetchEmployeeProfile}
-            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all hover:scale-105 flex items-center gap-2 mx-auto"
-          >
-            <FiRefreshCw className="w-4 h-4" />
-            Retry
-          </button>
         </div>
       </div>
     );
@@ -213,13 +211,16 @@ function MyProfile() {
 
   if (!employeeData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex items-center justify-center p-4">
-        <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border border-white/30">
-          <div className="w-16 h-16 mx-auto bg-amber-100 rounded-full flex items-center justify-center mb-4">
-            <FiUser className="w-8 h-8 text-amber-500" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex flex-col">
+        <Navbar userRole={userRole} onLogout={handleLogout} />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border border-white/30">
+            <div className="w-16 h-16 mx-auto bg-amber-100 rounded-full flex items-center justify-center mb-4">
+              <FiUser className="w-8 h-8 text-amber-500" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">No Profile Data</h3>
+            <p className="text-gray-500 text-sm">Unable to load profile data. Please try again.</p>
           </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">No Profile Data</h3>
-          <p className="text-gray-500 text-sm">Unable to load profile data. Please try again.</p>
         </div>
       </div>
     );
@@ -228,60 +229,48 @@ function MyProfile() {
   const data = employeeData;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex">
-      {/* ─── Sidebar ─── */}
-      <EmployeeSidebar 
-        employeeName={employeeName} 
-        onLogout={handleLogout}
-        onCollapseChange={handleSidebarToggle}
-      />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex flex-col">
+      {/* ─── Navbar ─── */}
+      <Navbar userRole={userRole} onLogout={handleLogout} />
 
       {/* ─── Main Content ─── */}
-      <div className={`flex-1 min-h-screen w-full ${mainContentPadding} flex flex-col transition-all duration-300 ease-in-out`}>
-        {/* ─── Fixed Header ─── */}
-        <header className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-white/30 shadow-sm flex-shrink-0">
-          <div className="flex flex-wrap items-center justify-between px-3 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-3 lg:py-4 gap-2">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30 flex-shrink-0">
-                <FaTasks className="text-white w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-sm sm:text-base md:text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent hidden xs:block truncate">
-                  My Profile
-                </h2>
-                <h2 className="text-xs sm:text-sm font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent xs:hidden">
-                  Profile
-                </h2>
-                <p className="text-[8px] sm:text-[10px] text-gray-500 hidden xs:block truncate max-w-[120px] sm:max-w-[200px]">
-                  {data.employeeId} · {data.name}
-                </p>
-              </div>
+      <div className="flex-1 w-full px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="admin-dash">
+          
+          {/* ─── Profile Header ─── */}
+          <div className="admin-dash__header flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div>
+              <h1 className="admin-dash__greeting flex items-center gap-2 text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight">
+                <FiUser className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" /> 
+                My <span>Profile</span>
+              </h1>
+              <p className="admin-dash__subtitle text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">
+                View and manage your personal and employment details.
+              </p>
             </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-wrap">
+
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <button
                 onClick={fetchEmployeeProfile}
-                className="p-1.5 sm:p-2 lg:p-2.5 bg-white/40 backdrop-blur-sm rounded-xl border border-white/30 hover:bg-white/60 transition-all hover:scale-105"
-                title="Refresh"
+                className="p-2 sm:p-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 transition shadow-xs"
+                title="Refresh Profile"
               >
-                <FiRefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-600" />
+                <FiRefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
               <button
                 onClick={handleLogout}
-                className="px-2 sm:px-3 lg:px-4 py-1 sm:py-1.5 lg:py-2 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-full text-[10px] sm:text-xs lg:text-sm font-semibold shadow-lg shadow-rose-500/30 hover:shadow-rose-500/50 transition-all hover:scale-105 flex items-center gap-1 sm:gap-2"
+                className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-rose-600 text-white rounded-xl font-semibold text-[10px] sm:text-xs hover:bg-rose-700 transition shadow-md"
               >
-                <FiLogOut className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4" />
+                <FiLogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden xs:inline">Logout</span>
               </button>
-              <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-[10px] sm:text-xs lg:text-sm shadow-lg shadow-indigo-500/30 flex-shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-500/30 flex-shrink-0">
                 {getInitials(data.name)}
               </div>
             </div>
           </div>
-        </header>
 
-        {/* ─── Scrollable Content ─── */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8">
-          {/* ─── Profile Header ─── */}
+          {/* ─── Profile Header Card ─── */}
           <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 backdrop-blur-xl rounded-2xl p-4 sm:p-6 lg:p-8 border border-white/30 shadow-lg mb-4 sm:mb-6">
             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
               {/* Avatar */}
@@ -308,6 +297,12 @@ function MyProfile() {
                     <FiBriefcase className="w-3 h-3" />
                     {data.department || 'N/A'}
                   </span>
+                  {data.phone && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-white/40 backdrop-blur-sm rounded-full text-xs text-gray-600 border border-white/30">
+                      <FiPhone className="w-3 h-3" />
+                      {data.phone}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

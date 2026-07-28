@@ -1,0 +1,23 @@
+/* Navbar custom animations and responsive styles */
+@keyframes navbarFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.horizontal-navbar {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.animate-fadeIn {
+  animation: navbarFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slideDown {
+  animation: navbarFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

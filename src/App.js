@@ -22,34 +22,51 @@ import EmpOverdueTask from './pages/EmpOverdueTask';
 import EmpPendingTask from './pages/EmpPendingTask';
 import EmpProgressTask from './pages/EmpProgressTask';
 import EmpCompletedTask from './pages/EmpCompletedTask';
+import DashBoard from './pages/DashBoard';
+import Teams from './pages/Teams';
 
 function App() {
   return (
     <Router>
       <div className="App">
         <Routes>
+          {/* Authentication */}
           <Route path="/" element={<Login />} />
+          
+          {/* Admin Dashboards & Routes */}
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
-          <Route path="/employee-dashboard" element={<EmployeeDashboard />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/staff" element={<Staff />} />
+          <Route path="/issues" element={<Issues />} />
+          <Route path="/admin-pending-task" element={<AdminPendingTask />} />
+          <Route path="/admin-progress-task" element={<AdminProgressTask />} />
+          <Route path="/admin-completed-task" element={<AdminCompletedTask />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/dashbord" element={<DashBoard/>}/>
+          <Route path="/teams" element={<Teams/>}/>
+          
+          {/* Employee Dashboards & Routes */}
+          <Route path="/employee-dashboard" element={<EmployeeDashboard />} />
+          <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
+          <Route path="/dashboard" element={<DashBoard />} />
           <Route path="/task" element={<Task />} />
           <Route path="/my-task" element={<MyTask />} />
           <Route path="/my-createdtask" element={<MyCreatedTasks />} />
           <Route path="/create-task" element={<CreateTask />} />
           <Route path="/my-issues" element={<MyIssues />} />
           <Route path="/my-today-tasks" element={<MyTodayTasks />} />
-           <Route path="/my-notifications" element={<MyNotifications />} />
+          <Route path="/my-notifications" element={<MyNotifications />} />
           <Route path="/employee-profile" element={<MyProfile />} />
-          <Route path="/issues" element={<Issues />} />
-          <Route path="/admin-pending-task" element={<AdminPendingTask />} />
-          <Route path="/admin-progress-task" element={<AdminProgressTask />} />
-          <Route path="/admin-completed-task" element={<AdminCompletedTask />} />
+          <Route path="/my-profile" element={<MyProfile />} />
+          
+          {/* Employee Specific Status Tasks */}
           <Route path="/emp-overdue-task" element={<EmpOverdueTask />} />
           <Route path="/emp-pending-task" element={<EmpPendingTask />} />
           <Route path="/emp-progress-task" element={<EmpProgressTask />} />
           <Route path="/emp-completed-task" element={<EmpCompletedTask />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="*" element={<Navigate to="/" />} />
+          
+          {/* Wildcard Catch-All Route (Must be last) */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </Router>

@@ -2337,7 +2337,7 @@ function Task() {
   useEffect(() => {
     const fetchTeams = async () => {
       try {
-        const response = await axios.get('http://localhost:5001/api/teams/all');
+        const response = await axios.get('https://api.timelyhealth.in/api/teams/all');
         if (response.data.success) {
           setTeams(response.data.data);
         }

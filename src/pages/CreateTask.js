@@ -287,7 +287,7 @@ function CreateTask() {
     const fetchTeams = async () => {
       setLoadingTeams(true);
       try {
-        const response = await fetch('http://localhost:5001/api/teams/all');
+        const response = await fetch('https://api.timelyhealth.in/api/teams/all');
         const data = await response.json();
         if (data.success) {
           setTeams(data.data);

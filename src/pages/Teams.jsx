@@ -18,7 +18,7 @@
 //   // Fetch all teams
 //   const fetchTeams = async () => {
 //     try {
-//       const response = await fetch('http://localhost:5001/api/teams/all')
+//       const response = await fetch('https://api.timelyhealth.in/api/teams/all')
 //       const data = await response.json()
 //       if (data.success) {
 //         setTeams(data.data)
@@ -32,7 +32,7 @@
 //   // Fetch all employees for dropdown
 //   const fetchEmployees = async () => {
 //     try {
-//       const response = await fetch('http://localhost:5001/api/teams/employees/list')
+//       const response = await fetch('https://api.timelyhealth.in/api/teams/employees/list')
 //       const data = await response.json()
 //       if (data.success) {
 //         setEmployees(data.data)
@@ -69,7 +69,7 @@
 //     setError('')
 
 //     try {
-//       const response = await fetch('http://localhost:5001/api/teams/create', {
+//       const response = await fetch('https://api.timelyhealth.in/api/teams/create', {
 //         method: 'POST',
 //         headers: {
 //           'Content-Type': 'application/json'
@@ -308,7 +308,7 @@ function Teams() {
   const fetchTeams = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5001/api/teams/all');
+      const response = await fetch('https://api.timelyhealth.in/api/teams/all');
       const data = await response.json();
       if (data.success) {
         setTeams(data.data);
@@ -362,8 +362,8 @@ function Teams() {
 
     try {
       const url = editingTeam 
-        ? `http://localhost:5001/api/teams/update/${editingTeam._id}`
-        : 'http://localhost:5001/api/teams/create';
+        ? `https://api.timelyhealth.in/api/teams/update/${editingTeam._id}`
+        : 'https://api.timelyhealth.in/api/teams/create';
       const method = editingTeam ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -415,7 +415,7 @@ function Teams() {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5001/api/teams/delete/${teamId}`, {
+      const response = await fetch(`https://api.timelyhealth.in/api/teams/delete/${teamId}`, {
         method: 'DELETE'
       });
 
